@@ -12,7 +12,7 @@ import (
 type MemoryArena struct {
 	memory []byte
 	size   int
-	used   int
+	offset int
 }
 
 // this function creates a new memory arena of a specified size
@@ -21,7 +21,7 @@ func NewArena(size int) *MemoryArena {
 	arena := MemoryArena{
 		memory: make([]byte, size),
 		size:   size,
-		used:   0,
+		offset: 0,
 	}
 	return &arena
 }
@@ -31,16 +31,16 @@ func NewArena(size int) *MemoryArena {
 // if there is enough space, it returns a pointer to the available memory and updates the used amount
 // if there is not enough space, it returns null(or some error indicator)
 func (arena *MemoryArena) Allocate(size int) unsafe.Pointer {
-	if arena.used+size > arena.size {
+	if arena.offset+size > arena.size {
 		return nil
 	}
-	result := unsafe.Pointer(&arena.memory[arena.used])
-	arena.used += size
+	result := unsafe.Pointer(&arena.memory[arena.offset])
+	arena.offset += size
 	return result
 }
 
 func (arena *MemoryArena) Reset() {
-	arena.used = 0
+	arena.offset = 0
 }
 
 func (arena *MemoryArena) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
