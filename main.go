@@ -46,7 +46,7 @@ func (arena *MemoryArena) Reset() {
 func (arena *MemoryArena) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
 	size := reflect.TypeOf(obj).Size()
 	ptr := arena.Allocate(int(size))
-	if ptr != nil {
+	if ptr == nil {
 		return nil, fmt.Errorf("cannot procees further")
 	}
 	reflect.NewAt(
