@@ -1,7 +1,7 @@
 # memory-arena example
 ```
-```
 go get github.com/Raezil/memoryArena@latest
+```
 ```
 type Person struct {
 	Name string
