@@ -52,6 +52,6 @@ func (arena *MemoryArena) AllocateObject(obj interface{}) (unsafe.Pointer, error
 	reflect.NewAt(
 		reflect.TypeOf(obj),
 		ptr,
-	)
+	).Elem().Set(reflect.ValueOf(obj))
 	return ptr, nil
 }
