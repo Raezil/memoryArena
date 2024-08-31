@@ -1,7 +1,10 @@
 # memory-arena example
+To install 
 ```
 go get github.com/Raezil/memoryArena@latest
 ```
+
+Example
 ```
 type Person struct {
 	Name string
@@ -9,7 +12,7 @@ type Person struct {
 }
 
 // NewPerson creates a new Person object in the arena
-func (arena *MemoryArena) NewPerson(name string, age int) (*Person, error) {
+func NewPerson(arena *MemoryArena, name string, age int) (*Person, error) {
 	person := Person{Name: name, Age: age}
 	ptr, err := arena.AllocateObject(person)
 	if err != nil {
