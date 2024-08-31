@@ -1,4 +1,4 @@
-# memory-arena example
+# memoryArena
 To install 
 ```
 go get github.com/Raezil/memoryArena@latest
