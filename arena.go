@@ -47,7 +47,7 @@ func (arena *MemoryArena) AllocateObject(obj interface{}) (unsafe.Pointer, error
 	size := reflect.TypeOf(obj).Size()
 	ptr := arena.Allocate(int(size))
 	if ptr == nil {
-		return nil, fmt.Errorf("cannot procees further")
+		return nil, fmt.Errorf("allocation failed due to insufficient memory")
 	}
 	reflect.NewAt(
 		reflect.TypeOf(obj),
