@@ -41,6 +41,9 @@ func (arena *MemoryArena) Allocate(size int) unsafe.Pointer {
 
 func (arena *MemoryArena) Reset() {
 	arena.offset = 0
+	for i := range arena.memory {
+		arena.memory[i] = 0
+	}
 }
 
 func (arena *MemoryArena) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
