@@ -23,7 +23,7 @@ func NewPerson(arena *MemoryArena, name string, age int) (*Person, error) {
 
 func main() {
 	arena := NewArena(512)
-	person, _ := arena.NewPerson("Kamil", 26)
+	person, _ := NewPerson(arena, "Kamil", 26)
 	defer arena.Reset()
 	fmt.Println(person)
 }
