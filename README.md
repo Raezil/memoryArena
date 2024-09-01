@@ -1,8 +1,6 @@
 # memoryArena
-To install 
-```
-go get github.com/Raezil/memoryArena@latest
-```
+The purpose of this package is to isolate multiple related allocations into a single area of memory, so that they can be freed all at once.
+
 
 Example
 ```
@@ -26,4 +24,9 @@ func main() {
 	fmt.Println(obj)
 }
 
+```
+
+To install 
+```
+go get github.com/Raezil/memoryArena@latest
 ```
