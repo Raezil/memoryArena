@@ -46,19 +46,26 @@ func (arena *MemoryArena) Reset() {
 	}
 }
 
+// AllocateObject allocates memory for the given object and returns a pointer to the allocated memory.
 func (arena *MemoryArena) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
 	size := reflect.TypeOf(obj).Size()
+
+	// Allocate memory
 	ptr := arena.Allocate(int(size))
 	if ptr == nil {
 		return nil, fmt.Errorf("allocation failed due to insufficient memory")
 	}
-	reflect.NewAt(
+
+	// Create a new value at the allocated memory and copy the object into it
+	newValue := reflect.NewAt(
 		reflect.TypeOf(obj),
 		ptr,
-	).Elem().Set(reflect.ValueOf(obj))
+	).Elem()
+	newValue.Set(reflect.ValueOf(obj))
 	return ptr, nil
 }
 
+// NewObject ollocate memory through AllocateObject, returns pointer to T or error handle.
 func NewObject[T any](arena *MemoryArena, obj T) (*T, error) {
 	ptr, err := arena.AllocateObject(obj)
 	if err != nil {
