@@ -18,7 +18,7 @@ type Person struct {
 }
 
 func main() {
-	arena := NewArena(512)
+	arena := NewMemoryArena[Person](512)
 	obj, _ := NewObject[Person](arena, Person{"Kamil", 26})
 	defer arena.Reset()
 	fmt.Println(obj)
