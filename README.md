@@ -18,12 +18,19 @@ type Person struct {
 }
 
 func main() {
-	arena := NewMemoryArena[Person](512)
-	obj, _ := NewObject[Person](arena, Person{"Kamil", 26})
-	defer arena.Reset()
+	arena, err := NewMemoryArena[[]Person](512)
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
+	concurrentArena := NewConcurrentArena[[]Person](*arena)
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
+	obj, _ := NewObject[[]Person](concurrentArena, []Person{Person{"Kamil", 27}, Person{"Lukasz", 28}})
+	defer Reset(arena)
 	fmt.Println(obj)
-}
 
+}
 ```
 
 To install 
