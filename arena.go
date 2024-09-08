@@ -2,16 +2,19 @@ package memoryArena
 
 import "unsafe"
 
+// interface for MemoryArena and ConcurrentArena behaviours
 type Arena interface {
 	Allocate(size int) (unsafe.Pointer, error)
 	Reset()
 	AllocateObject(obj interface{}) (unsafe.Pointer, error)
 }
 
+// Arena allocates memory space to later use it
 func Allocate(arena Arena, size int) (unsafe.Pointer, error) {
 	return arena.Allocate(size)
 }
 
+// Object is being allocated in the Arena.
 func AllocateObject(arena Arena, obj interface{}) (unsafe.Pointer, error) {
 	return arena.AllocateObject(obj)
 }
