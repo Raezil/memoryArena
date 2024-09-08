@@ -63,12 +63,3 @@ func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, er
 	newValue.Set(reflect.ValueOf(obj))
 	return ptr, nil
 }
-
-// NewObject ollocate memory through AllocateObject, returns pointer to T or error handle.
-func NewObject[T any](arena Arena, obj T) (*T, error) {
-	ptr, err := arena.AllocateObject(obj)
-	if err != nil {
-		return nil, err
-	}
-	return (*T)(ptr), nil
-}
