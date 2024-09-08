@@ -17,7 +17,7 @@ func Reset(arena Arena) {
 	arena.Reset()
 }
 
-// NewObject ollocate memory through AllocateObject, returns pointer to T or error handle.
+// NewObject allocate memory through AllocateObject, returns pointer to T or error handle.
 func NewObject[T any](arena Arena, obj T) (*T, error) {
 	ptr, err := AllocateObject(arena, obj)
 	if err != nil {
