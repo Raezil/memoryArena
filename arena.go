@@ -28,7 +28,6 @@ func Reset(arena Arena) {
 // size the total size of the memory arena
 // offset the amount of memory currently in use
 type MemoryArena[T any] struct {
-	Type   T
 	memory []byte
 	size   int
 	offset int
