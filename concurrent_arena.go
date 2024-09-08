@@ -22,8 +22,8 @@ func NewConcurrentArena[T any](arena MemoryArena[T]) *ConcurrentArena[T] {
 
 // Allocating object in conccurrent arena
 func (arena *ConcurrentArena[T]) Allocate(size int) (unsafe.Pointer, error) {
-	defer arena.mutex.Unlock()
 	arena.mutex.Lock()
+	defer arena.mutex.Unlock()
 	ptr, err := arena.MemoryArena.Allocate(size)
 	if err != nil {
 		return nil, err
@@ -33,16 +33,17 @@ func (arena *ConcurrentArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 
 // Resetting concurrent arena
 func (arena *ConcurrentArena[T]) Reset() {
-	defer arena.mutex.Unlock()
 	arena.mutex.Lock()
+	defer arena.mutex.Unlock()
 	arena.MemoryArena.Reset()
 }
 
 // Object is being allocated in the Concurrent Arena.
 func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
-	defer arena.mutex.Unlock()
 	arena.mutex.Lock()
 	size := reflect.TypeOf(obj).Size()
+	defer arena.mutex.Unlock()
+
 	// Allocate memory
 	ptr, err := arena.Allocate(int(size))
 	if err != nil {
@@ -55,5 +56,6 @@ func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer
 		ptr,
 	).Elem()
 	newValue.Set(reflect.ValueOf(obj))
+
 	return ptr, nil
 }
