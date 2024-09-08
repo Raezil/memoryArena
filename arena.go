@@ -84,7 +84,7 @@ func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, er
 }
 
 // NewObject ollocate memory through AllocateObject, returns pointer to T or error handle.
-func NewObject[T any](arena *MemoryArena[T], obj T) (*T, error) {
+func NewObject[T any](arena Arena, obj T) (*T, error) {
 	ptr, err := arena.AllocateObject(obj)
 	if err != nil {
 		return nil, err
