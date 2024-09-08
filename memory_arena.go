@@ -18,6 +18,9 @@ type MemoryArena[T any] struct {
 // this function creates a new memory arena of a specified size
 // it allocates a block of memory and initializes the arena's properties
 func NewMemoryArena[T any](size int) *MemoryArena[T] {
+	if size < 0 {
+		panic("Cannot initialize, size below 0")
+	}
 	arena := MemoryArena[T]{
 		memory: make([]byte, size),
 		size:   size,
@@ -30,13 +33,13 @@ func NewMemoryArena[T any](size int) *MemoryArena[T] {
 // it checks if there's enough space left in the arena
 // if there is enough space, it returns a pointer to the available memory and updates the used amount
 // if there is not enough space, it returns null(or some error indicator)
-func (arena *MemoryArena[T]) Allocate(size int) unsafe.Pointer {
+func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 	if arena.offset+size > arena.size {
-		return nil
+		return nil, fmt.Errorf("there is no enough space left in the arena")
 	}
 	result := unsafe.Pointer(&arena.memory[arena.offset])
 	arena.offset += size
-	return result
+	return result, nil
 }
 
 func (arena *MemoryArena[T]) Reset() {
@@ -50,8 +53,8 @@ func (arena *MemoryArena[T]) Reset() {
 func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
 	size := reflect.TypeOf(obj).Size()
 	// Allocate memory
-	ptr := arena.Allocate(int(size))
-	if ptr == nil {
+	ptr, err := arena.Allocate(int(size))
+	if err != nil {
 		return nil, fmt.Errorf("allocation failed due to insufficient memory")
 	}
 

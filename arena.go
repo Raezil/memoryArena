@@ -3,12 +3,12 @@ package memoryArena
 import "unsafe"
 
 type Arena interface {
-	Allocate(size int) unsafe.Pointer
+	Allocate(size int) (unsafe.Pointer, error)
 	Reset()
 	AllocateObject(obj interface{}) (unsafe.Pointer, error)
 }
 
-func Allocate(arena Arena, size int) unsafe.Pointer {
+func Allocate(arena Arena, size int) (unsafe.Pointer, error) {
 	return arena.Allocate(size)
 }
 

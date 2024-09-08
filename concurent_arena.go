@@ -6,35 +6,38 @@ import (
 )
 
 type ConcurrentArena[T any] struct {
+	*MemoryArena[T]
 	mutex sync.Mutex
-	arena MemoryArena[T]
 }
 
 func NewConcurrentArena[T any](arena MemoryArena[T]) *ConcurrentArena[T] {
 	return &ConcurrentArena[T]{
-		arena: arena,
+		MemoryArena: &arena,
 	}
 }
 
-func (concurrentArena *ConcurrentArena[T]) Allocate(size int) unsafe.Pointer {
-	concurrentArena.mutex.Lock()
-	ptr := concurrentArena.arena.Allocate(size)
-	concurrentArena.mutex.Unlock()
-	return ptr
-}
-
-func (concurrentArena *ConcurrentArena[T]) Reset() {
-	concurrentArena.mutex.Lock()
-	concurrentArena.arena.Reset()
-	concurrentArena.mutex.Unlock()
-}
-
-func (concurrentArena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
-	concurrentArena.mutex.Lock()
-	val, err := concurrentArena.arena.AllocateObject(obj)
+func (arena *ConcurrentArena[T]) Allocate(size int) (unsafe.Pointer, error) {
+	arena.mutex.Lock()
+	ptr, err := arena.MemoryArena.Allocate(size)
 	if err != nil {
 		return nil, err
 	}
-	concurrentArena.mutex.Unlock()
+	defer arena.mutex.Unlock()
+	return ptr, nil
+}
+
+func (arena *ConcurrentArena[T]) Reset() {
+	arena.mutex.Lock()
+	arena.MemoryArena.Reset()
+	defer arena.mutex.Unlock()
+}
+
+func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
+	arena.mutex.Lock()
+	val, err := arena.MemoryArena.AllocateObject(obj)
+	if err != nil {
+		return nil, err
+	}
+	defer arena.mutex.Unlock()
 	return val, nil
 }
