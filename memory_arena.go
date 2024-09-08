@@ -17,16 +17,16 @@ type MemoryArena[T any] struct {
 
 // this function creates a new memory arena of a specified size
 // it allocates a block of memory and initializes the arena's properties
-func NewMemoryArena[T any](size int) *MemoryArena[T] {
+func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	if size < 0 {
-		panic("Cannot initialize, size below 0")
+		return nil, fmt.Errorf("Cannot initialize, size below 0")
 	}
 	arena := MemoryArena[T]{
 		memory: make([]byte, size),
 		size:   size,
 		offset: 0,
 	}
-	return &arena
+	return &arena, nil
 }
 
 // this function is used to allocate memory from the arena
