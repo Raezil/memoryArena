@@ -6,10 +6,29 @@ import (
 	"unsafe"
 )
 
+type Arena interface {
+	Allocate(size int) unsafe.Pointer
+	Reset()
+	AllocateObject(obj interface{}) (unsafe.Pointer, error)
+}
+
+func Allocate(arena Arena, size int) unsafe.Pointer {
+	return arena.Allocate(size)
+}
+
+func AllocateObject(arena Arena, obj interface{}) (unsafe.Pointer, error) {
+	return arena.AllocateObject(obj)
+}
+
+func Reset(arena Arena) {
+	arena.Reset()
+}
+
 // memory: A byte array that holds the actual memory
 // size the total size of the memory arena
-// used the amount of memory currently in use
-type MemoryArena struct {
+// offset the amount of memory currently in use
+type MemoryArena[T any] struct {
+	Type   T
 	memory []byte
 	size   int
 	offset int
@@ -17,8 +36,8 @@ type MemoryArena struct {
 
 // this function creates a new memory arena of a specified size
 // it allocates a block of memory and initializes the arena's properties
-func NewArena(size int) *MemoryArena {
-	arena := MemoryArena{
+func NewMemoryArena[T any](size int) *MemoryArena[T] {
+	arena := MemoryArena[T]{
 		memory: make([]byte, size),
 		size:   size,
 		offset: 0,
@@ -30,7 +49,7 @@ func NewArena(size int) *MemoryArena {
 // it checks if there's enough space left in the arena
 // if there is enough space, it returns a pointer to the available memory and updates the used amount
 // if there is not enough space, it returns null(or some error indicator)
-func (arena *MemoryArena) Allocate(size int) unsafe.Pointer {
+func (arena *MemoryArena[T]) Allocate(size int) unsafe.Pointer {
 	if arena.offset+size > arena.size {
 		return nil
 	}
@@ -39,7 +58,7 @@ func (arena *MemoryArena) Allocate(size int) unsafe.Pointer {
 	return result
 }
 
-func (arena *MemoryArena) Reset() {
+func (arena *MemoryArena[T]) Reset() {
 	arena.offset = 0
 	for i := range arena.memory {
 		arena.memory[i] = 0
@@ -47,9 +66,8 @@ func (arena *MemoryArena) Reset() {
 }
 
 // AllocateObject allocates memory for the given object and returns a pointer to the allocated memory.
-func (arena *MemoryArena) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
+func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
 	size := reflect.TypeOf(obj).Size()
-
 	// Allocate memory
 	ptr := arena.Allocate(int(size))
 	if ptr == nil {
@@ -66,7 +84,7 @@ func (arena *MemoryArena) AllocateObject(obj interface{}) (unsafe.Pointer, error
 }
 
 // NewObject ollocate memory through AllocateObject, returns pointer to T or error handle.
-func NewObject[T any](arena *MemoryArena, obj T) (*T, error) {
+func NewObject[T any](arena *MemoryArena[T], obj T) (*T, error) {
 	ptr, err := arena.AllocateObject(obj)
 	if err != nil {
 		return nil, err
