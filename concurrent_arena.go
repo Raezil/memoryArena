@@ -37,7 +37,7 @@ func (arena *ConcurrentArena[T]) Reset() {
 }
 
 // Object is being allocated in the Concurrent Arena.
-func (arena *ConcurrentArena[T]) AllocateObject(obj T) (unsafe.Pointer, error) {
+func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
 	defer arena.mutex.Unlock()
 	arena.mutex.Lock()
 	return arena.MemoryArena.AllocateObject(obj)

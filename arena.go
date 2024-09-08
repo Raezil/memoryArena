@@ -9,7 +9,7 @@ type Arena interface {
 }
 
 // Object is being allocated in the Arena.
-func AllocateObject(arena Arena, obj interface{}) (unsafe.Pointer, error) {
+func AllocateObject[T any](arena Arena, obj T) (unsafe.Pointer, error) {
 	return arena.AllocateObject(obj)
 }
 
