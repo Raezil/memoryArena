@@ -31,3 +31,13 @@ func NewObject[T any](arena Arena, obj T) (*T, error) {
 	defer mutex.Unlock()
 	return (*T)(ptr), nil
 }
+
+func AppendSlice[T any](obj *T, arena Arena, slice *[]T) (*[]T, error) {
+	*slice = append(*slice, *obj)
+	ptr, err := AllocateObject(arena, slice)
+	if err != nil {
+		return nil, err
+	}
+	return (*[]T)(ptr), nil
+
+}
