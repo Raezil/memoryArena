@@ -28,15 +28,28 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	}
 	return &arena, nil
 }
+func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
+	if (arena.offset % int(alignment)) != 0 {
+		arena.offset = (arena.offset + int(alignment-1)) &^ (int(alignment) - 1)
+	}
+}
 
 // this function is used to allocate memory from the arena
 // it checks if there's enough space left in the arena
 // if there is enough space, it returns a pointer to the available memory and updates the used amount
 // if there is not enough space, it returns null(or some error indicator)
 func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
-	if arena.offset+size > arena.size {
-		return nil, fmt.Errorf("there is no enough space left in the arena")
+	if size <= 0 {
+		return nil, fmt.Errorf("allocation size must be greater than 0")
 	}
+
+	alignment := unsafe.Alignof(new(T))
+	arena.alignOffset(alignment)
+
+	if arena.offset+size > arena.size {
+		return nil, fmt.Errorf("not enough space left in the arena")
+	}
+
 	result := unsafe.Pointer(&arena.memory[arena.offset])
 	arena.offset += size
 	return result, nil
