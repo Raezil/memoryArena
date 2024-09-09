@@ -28,6 +28,7 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	}
 	return &arena, nil
 }
+
 func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
 	if (arena.offset % int(alignment)) != 0 {
 		arena.offset = (arena.offset + int(alignment-1)) &^ (int(alignment) - 1)
@@ -55,11 +56,15 @@ func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 	return result, nil
 }
 
-func (arena *MemoryArena[T]) Reset() {
-	arena.offset = 0
+func (arena *MemoryArena[T]) Free() {
 	for i := range arena.memory {
 		arena.memory[i] = 0
 	}
+}
+
+func (arena *MemoryArena[T]) Reset() {
+	arena.offset = 0
+	arena.Free()
 }
 
 // AllocateObject allocates memory for the given object and returns a pointer to the allocated memory.
