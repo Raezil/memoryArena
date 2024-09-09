@@ -22,12 +22,10 @@ func NewConcurrentArena[T any](arena MemoryArena[T]) *ConcurrentArena[T] {
 
 // Allocating object in conccurrent arena
 func (arena *ConcurrentArena[T]) Allocate(size int) (unsafe.Pointer, error) {
-	arena.mutex.Lock()
 	ptr, err := arena.MemoryArena.Allocate(size)
 	if err != nil {
 		return nil, err
 	}
-	arena.mutex.Unlock()
 	return ptr, nil
 }
 
