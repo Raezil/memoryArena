@@ -2,6 +2,7 @@ package memoryArena
 
 import (
 	"fmt"
+	"reflect"
 	"sync"
 	"unsafe"
 )
@@ -38,10 +39,15 @@ func (arena *ConcurrentArena[T]) Reset() {
 // Object is being allocated in the Concurrent Arena.
 func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
 	arena.mutex.Lock()
-	ptr, err := arena.MemoryArena.AllocateObject(obj)
+	size := reflect.TypeOf(obj).Size()
+	// Allocate memory
+	ptr, err := arena.Allocate(int(size))
 	if err != nil {
-		return nil, fmt.Errorf(err.Error())
+		return nil, fmt.Errorf("allocation failed due to insufficient memory")
 	}
+
+	// Create a new value at the allocated memory and copy the object into it
+	ptr = SetNewValue(&ptr, obj)
 	arena.mutex.Unlock()
 
 	return ptr, nil
