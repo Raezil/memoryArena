@@ -48,7 +48,10 @@ func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer
 	}
 
 	// Create a new value at the allocated memory and copy the object into it
-	ptr = SetNewValue(&ptr, obj)
+	ptr, err = SetNewValue(&ptr, obj)
+	if err != nil {
+		return nil, err
+	}
 	arena.mutex.Unlock()
 
 	return ptr, nil

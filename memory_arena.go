@@ -19,7 +19,7 @@ type MemoryArena[T any] struct {
 // it allocates a block of memory and initializes the arena's properties
 func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	if size <= 0 {
-		return nil, fmt.Errorf("Cannot initialize, size below 0")
+		return nil, fmt.Errorf("cannot initialize, size below 0")
 	}
 	arena := MemoryArena[T]{
 		memory: make([]byte, size),
@@ -90,6 +90,9 @@ func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, er
 	}
 
 	// Create a new value at the allocated memory and copy the object into it
-	ptr = SetNewValue(&ptr, obj)
+	ptr, err = SetNewValue(&ptr, obj)
+	if err != nil {
+		return nil, err
+	}
 	return ptr, nil
 }
