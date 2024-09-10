@@ -41,6 +41,18 @@ func AppendSlice[T any](obj *T, arena Arena, slice *[]T) (*[]T, error) {
 
 }
 
+// InsertMap inserts object to hashmap and returns pointer to hashmap or error handle.
+func InsertMap[T any](obj *T, arena Arena, hashmap *map[string]T, key string) (*map[string]T, error) {
+	(*hashmap)[key] = *obj
+	ptr, err := AllocateObject(arena, hashmap)
+	if err != nil {
+		return nil, err
+	}
+	return (*map[string]T)(ptr), nil
+
+}
+
+// SetNewValue sets new value to pointer.
 func SetNewValue(ptr *unsafe.Pointer, obj interface{}) unsafe.Pointer {
 	newValue := reflect.NewAt(
 		reflect.TypeOf(obj),
