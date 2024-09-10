@@ -16,6 +16,7 @@ func AllocateObject[T any](arena Arena, obj T) (unsafe.Pointer, error) {
 	return arena.AllocateObject(obj)
 }
 
+// Resetting the Arena.
 func Reset(arena Arena) {
 	arena.Reset()
 }
@@ -29,6 +30,7 @@ func NewObject[T any](arena Arena, obj T) (*T, error) {
 	return (*T)(ptr), nil
 }
 
+// AppendSlice appends object to slice and returns pointer to slice or error handle.
 func AppendSlice[T any](obj *T, arena Arena, slice *[]T) (*[]T, error) {
 	*slice = append(*slice, *obj)
 	ptr, err := AllocateObject(arena, slice)

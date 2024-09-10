@@ -29,6 +29,7 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	return &arena, nil
 }
 
+// this function aligns the offset to the specified alignment
 func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
 	if (arena.offset % int(alignment)) != 0 {
 		arena.offset = (arena.offset + int(alignment-1)) &^ (int(alignment) - 1)
@@ -56,12 +57,14 @@ func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 	return result, nil
 }
 
+// this function frees the memory in the arena by setting all the bytes to 0
 func (arena *MemoryArena[T]) Free() {
 	for i := range arena.memory {
 		arena.memory[i] = 0
 	}
 }
 
+// this function resets the arena by setting the offset to 0
 func (arena *MemoryArena[T]) Reset() {
 	arena.offset = 0
 	arena.Free()
