@@ -77,9 +77,6 @@ func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, er
 	}
 
 	// Create a new value at the allocated memory and copy the object into it
-	ptr, err = SetNewValue(&ptr, obj)
-	if err != nil {
-		return nil, err
-	}
+	ptr = SetNewValue(&ptr, obj)
 	return ptr, nil
 }
