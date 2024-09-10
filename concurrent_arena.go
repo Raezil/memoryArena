@@ -10,7 +10,7 @@ import (
 type ConcurrentArena[T any] struct {
 	// embedding MemoryArena type in ConcurrentArena
 	*MemoryArena[T]
-	mutex sync.Mutex
+	mutex sync.RWMutex
 }
 
 // Constructor of ConcurrentArena
@@ -39,6 +39,7 @@ func (arena *ConcurrentArena[T]) Reset() {
 // Object is being allocated in the Concurrent Arena.
 func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
 	arena.mutex.Lock()
+	// Get the size of the object
 	size := reflect.TypeOf(obj).Size()
 	// Allocate memory
 	ptr, err := arena.Allocate(int(size))
@@ -47,7 +48,10 @@ func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer
 	}
 
 	// Create a new value at the allocated memory and copy the object into it
-	ptr = SetNewValue(&ptr, obj)
+	ptr, err = SetNewValue(&ptr, obj)
+	if err != nil {
+		return nil, err
+	}
 	arena.mutex.Unlock()
 
 	return ptr, nil

@@ -68,7 +68,7 @@ func TestSetNewValue(t *testing.T) {
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	ptr = SetNewValue(&ptr, obj)
+	ptr, _ = SetNewValue(&ptr, obj)
 	if ptr == nil {
 		t.Errorf("Error: ptr is nil")
 	}

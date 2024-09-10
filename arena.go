@@ -1,6 +1,7 @@
 package memoryArena
 
 import (
+	"fmt"
 	"reflect"
 	"unsafe"
 )
@@ -53,11 +54,14 @@ func InsertMap[T any](obj *T, arena Arena, hashmap *map[string]T, key string) (*
 }
 
 // SetNewValue sets new value to pointer.
-func SetNewValue(ptr *unsafe.Pointer, obj interface{}) unsafe.Pointer {
+func SetNewValue(ptr *unsafe.Pointer, obj interface{}) (unsafe.Pointer, error) {
+	if ptr == nil {
+		return nil, fmt.Errorf("pointer is equal nil")
+	}
 	newValue := reflect.NewAt(
 		reflect.TypeOf(obj),
 		*ptr,
 	).Elem()
 	newValue.Set(reflect.ValueOf(obj))
-	return *ptr
+	return *ptr, nil
 }

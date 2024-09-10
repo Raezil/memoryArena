@@ -19,7 +19,7 @@ type MemoryArena[T any] struct {
 // it allocates a block of memory and initializes the arena's properties
 func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	if size <= 0 {
-		return nil, fmt.Errorf("Cannot initialize, size below 0")
+		return nil, fmt.Errorf("cannot initialize, size below 0")
 	}
 	arena := MemoryArena[T]{
 		memory: make([]byte, size),
@@ -36,6 +36,16 @@ func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
 	}
 }
 
+// Remaining capacity of the arena
+func (arena *MemoryArena[T]) UsedCapacity(size int) int {
+	return arena.offset + size
+}
+
+// checking boundries of the arena
+func (arena *MemoryArena[T]) ArenasBoundary(size int) bool {
+	return arena.UsedCapacity(size) > arena.size
+}
+
 // this function is used to allocate memory from the arena
 // it checks if there's enough space left in the arena
 // if there is enough space, it returns a pointer to the available memory and updates the used amount
@@ -48,7 +58,7 @@ func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 	alignment := unsafe.Alignof(new(T))
 	arena.alignOffset(alignment)
 
-	if arena.offset+size > arena.size {
+	if arena.ArenasBoundary(size) {
 		return nil, fmt.Errorf("not enough space left in the arena")
 	}
 
@@ -80,6 +90,9 @@ func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, er
 	}
 
 	// Create a new value at the allocated memory and copy the object into it
-	ptr = SetNewValue(&ptr, obj)
+	ptr, err = SetNewValue(&ptr, obj)
+	if err != nil {
+		return nil, err
+	}
 	return ptr, nil
 }
