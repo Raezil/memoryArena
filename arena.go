@@ -2,7 +2,6 @@ package memoryArena
 
 import (
 	"reflect"
-	"sync"
 	"unsafe"
 )
 
@@ -23,13 +22,10 @@ func Reset(arena Arena) {
 
 // NewObject allocate memory through AllocateObject, returns pointer to T or error handle.
 func NewObject[T any](arena Arena, obj T) (*T, error) {
-	mutex := sync.Mutex{}
-	mutex.Lock()
 	ptr, err := AllocateObject(arena, obj)
 	if err != nil {
 		return nil, err
 	}
-	defer mutex.Unlock()
 	return (*T)(ptr), nil
 }
 
