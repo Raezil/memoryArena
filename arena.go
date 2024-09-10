@@ -1,6 +1,7 @@
 package memoryArena
 
 import (
+	"reflect"
 	"sync"
 	"unsafe"
 )
@@ -40,4 +41,13 @@ func AppendSlice[T any](obj *T, arena Arena, slice *[]T) (*[]T, error) {
 	}
 	return (*[]T)(ptr), nil
 
+}
+
+func SetNewValue(ptr *unsafe.Pointer, obj interface{}) unsafe.Pointer {
+	newValue := reflect.NewAt(
+		reflect.TypeOf(obj),
+		*ptr,
+	).Elem()
+	newValue.Set(reflect.ValueOf(obj))
+	return *ptr
 }

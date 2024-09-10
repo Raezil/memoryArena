@@ -77,10 +77,6 @@ func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, er
 	}
 
 	// Create a new value at the allocated memory and copy the object into it
-	newValue := reflect.NewAt(
-		reflect.TypeOf(obj),
-		ptr,
-	).Elem()
-	newValue.Set(reflect.ValueOf(obj))
+	ptr = SetNewValue(&ptr, obj)
 	return ptr, nil
 }
