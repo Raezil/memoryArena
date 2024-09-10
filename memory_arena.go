@@ -36,6 +36,16 @@ func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
 	}
 }
 
+// Remaining capacity of the arena
+func (arena *MemoryArena[T]) RemainingCapacity(size int) int {
+	return arena.offset + size
+}
+
+// checking boundries of the arena
+func (arena *MemoryArena[T]) ArenasBoundary(size int) bool {
+	return arena.RemainingCapacity(size) > arena.size
+}
+
 // this function is used to allocate memory from the arena
 // it checks if there's enough space left in the arena
 // if there is enough space, it returns a pointer to the available memory and updates the used amount
@@ -48,7 +58,7 @@ func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 	alignment := unsafe.Alignof(new(T))
 	arena.alignOffset(alignment)
 
-	if arena.offset+size > arena.size {
+	if arena.ArenasBoundary(size) {
 		return nil, fmt.Errorf("not enough space left in the arena")
 	}
 
