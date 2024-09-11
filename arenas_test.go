@@ -46,7 +46,7 @@ func TestNewObject(t *testing.T) {
 }
 
 func TestAppendSlice(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
+	arena, err := NewMemoryArena[[]int](100)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
@@ -94,6 +94,48 @@ func TestConcurrentArena_AllocateObject(t *testing.T) {
 	concurrentArena := NewConcurrentArena(*arena)
 	obj := 5
 	_, err = concurrentArena.AllocateObject(obj)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+}
+
+func BenchmarkConcurrentArena_AllocateObject(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	concurrentArena := NewConcurrentArena(*arena)
+	obj := 5
+	for i := 0; i < b.N; i++ {
+		_, err = concurrentArena.AllocateObject(obj)
+		if err != nil {
+			b.Errorf("Error: %v", err)
+		}
+	}
+}
+
+func BenchmarkMemoryArena_AllocateObject(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	obj := 5
+	for i := 0; i < b.N; i++ {
+		_, err = arena.AllocateObject(obj)
+		if err != nil {
+			b.Errorf("Error: %v", err)
+		}
+	}
+}
+
+func TestInsertMap(t *testing.T) {
+	arena, err := NewMemoryArena[map[string]int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	obj := 4
+	slice := map[string]int{"1": 1, "2": 2, "3": 3}
+	_, err = InsertMap(&obj, arena, &slice, "4")
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
