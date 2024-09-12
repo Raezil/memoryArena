@@ -53,7 +53,7 @@ func (arena *MemoryArena[T]) UsedCapacity(size int) int {
 }
 
 // checking boundries of the arena
-func (arena *MemoryArena[T]) ArenasBoundary(size int) bool {
+func (arena *MemoryArena[T]) IsWithinBounds(size int) bool {
 	return arena.UsedCapacity(size) > arena.buffer.size
 }
 
@@ -69,7 +69,7 @@ func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 	alignment := unsafe.Alignof(new(T))
 	arena.alignOffset(alignment)
 
-	if arena.ArenasBoundary(size) {
+	if arena.IsWithinBounds(size) {
 		return nil, fmt.Errorf("not enough space left in the arena")
 	}
 
