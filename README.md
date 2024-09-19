@@ -29,9 +29,6 @@ func main() {
 		fmt.Printf(err.Error())
 	}
 	concurrentArena := NewConcurrentArena[[]Person](*arena)
-	if err != nil {
-		fmt.Printf(err.Error())
-	}
 	obj, _ := NewObject[[]Person](concurrentArena, []Person{Person{"Kamil", 27}, Person{"Lukasz", 28}})
 	defer Reset(arena)
 	fmt.Println(obj)
