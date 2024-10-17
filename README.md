@@ -40,3 +40,5 @@ To install
 ```
 go get github.com/Raezil/memoryArena@latest
 ```
+
+If you wish to test it, run commnad: go test
