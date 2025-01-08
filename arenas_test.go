@@ -216,3 +216,58 @@ func TestMemoryArena_Reset(t *testing.T) {
 		}
 	}
 }
+
+func TestMemoryArena_Free(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	arena.Free()
+
+	for i := range arena.buffer.memory {
+		if arena.buffer.memory[i] != 0 {
+			t.Errorf("Error: memory is not freed")
+		}
+	}
+}
+
+func TestMemoryArena_IsWithinBounds(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	if arena.IsWithinBounds(100) {
+		t.Errorf("Error: out of bounds")
+	}
+}
+
+func TestMemoryArena_UsedCapacity(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	if arena.UsedCapacity(10) != 10 {
+		t.Errorf("Error: used capacity is not correct")
+	}
+}
+
+func TestMemoryArena_alignOffset(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	arena.alignOffset(8)
+	if arena.buffer.offset != 0 {
+		t.Errorf("Error: offset is not aligned")
+	}
+}
+
+func TestMemoryArenaBuffer_NewMemoryArenaBuffer(t *testing.T) {
+	arena := NewMemoryArenaBuffer(100)
+	if arena.size != 100 {
+		t.Errorf("Error: size is not correct")
+	}
+	if arena.offset != 0 {
+		t.Errorf("Error: offset is not correct")
+	}
+}
