@@ -187,3 +187,32 @@ func TestInsertMap(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 }
+
+func BenchmarkInsertMap(b *testing.B) {
+	arena, err := NewMemoryArena[map[string]int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	obj := 4
+	slice := map[string]int{"1": 1, "2": 2, "3": 3}
+	for i := 0; i < b.N; i++ {
+		_, err = InsertMap(&obj, arena, &slice, "4")
+		if err != nil {
+			b.Errorf("Error: %v", err)
+		}
+	}
+}
+
+func TestMemoryArena_Reset(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	arena.Reset()
+
+	for i := range arena.buffer.memory {
+		if arena.buffer.memory[i] != 0 {
+			t.Errorf("Error: memory is not reset")
+		}
+	}
+}
