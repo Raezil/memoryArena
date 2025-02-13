@@ -231,6 +231,21 @@ func TestMemoryArena_Free(t *testing.T) {
 	}
 }
 
+func TestConcurrentArena_Free(t *testing.T) {
+	memoryarena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	arena := NewConcurrentArena[int](*memoryarena)
+	arena.Free()
+
+	for i := range arena.buffer.memory {
+		if arena.buffer.memory[i] != 0 {
+			t.Errorf("Error: memory is not freed")
+		}
+	}
+}
+
 func TestMemoryArena_IsWithinBounds(t *testing.T) {
 	arena, err := NewMemoryArena[int](100)
 	if err != nil {
