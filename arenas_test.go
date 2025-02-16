@@ -246,12 +246,12 @@ func TestConcurrentArena_Free(t *testing.T) {
 	}
 }
 
-func TestMemoryArena_IsWithinBounds(t *testing.T) {
+func TestMemoryArena_hasSpace(t *testing.T) {
 	arena, err := NewMemoryArena[int](100)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	if arena.IsWithinBounds(100) {
+	if arena.hasSpace(100) {
 		t.Errorf("Error: out of bounds")
 	}
 }

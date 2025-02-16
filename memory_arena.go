@@ -32,7 +32,7 @@ type MemoryArena[T any] struct {
 // it allocates a block of memory and initializes the arena's properties
 func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	if size <= 0 {
-		return nil, fmt.Errorf("cannot initialize, size below 0")
+		return nil, fmt.Errorf("arena size must be greater than 0")
 	}
 	arena := MemoryArena[T]{
 		buffer: *NewMemoryArenaBuffer(size),
@@ -42,7 +42,8 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 
 // this function aligns the offset to the specified alignment
 func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
-	if (arena.buffer.offset % int(alignment)) != 0 {
+	remainder := arena.buffer.offset % int(alignment)
+	if remainder != 0 {
 		arena.buffer.offset = (arena.buffer.offset + int(alignment-1)) &^ (int(alignment) - 1)
 	}
 }
@@ -53,7 +54,7 @@ func (arena *MemoryArena[T]) UsedCapacity(size int) int {
 }
 
 // checking boundries of the arena
-func (arena *MemoryArena[T]) IsWithinBounds(size int) bool {
+func (arena *MemoryArena[T]) hasSpace(size int) bool {
 	return arena.UsedCapacity(size) > arena.buffer.size
 }
 
@@ -69,7 +70,7 @@ func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 	alignment := unsafe.Alignof(new(T))
 	arena.alignOffset(alignment)
 
-	if arena.IsWithinBounds(size) {
+	if arena.hasSpace(size) {
 		return nil, fmt.Errorf("not enough space left in the arena")
 	}
 
