@@ -246,22 +246,22 @@ func TestConcurrentArena_Free(t *testing.T) {
 	}
 }
 
-func TestMemoryArena_IsWithinBounds(t *testing.T) {
+func TestMemoryArena_hasSpace(t *testing.T) {
 	arena, err := NewMemoryArena[int](100)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	if arena.IsWithinBounds(100) {
+	if arena.hasSpace(100) {
 		t.Errorf("Error: out of bounds")
 	}
 }
 
-func TestMemoryArena_UsedCapacity(t *testing.T) {
+func TestMemoryArena_nextOffset(t *testing.T) {
 	arena, err := NewMemoryArena[int](100)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	if arena.UsedCapacity(10) != 10 {
+	if arena.nextOffset(10) != 10 {
 		t.Errorf("Error: used capacity is not correct")
 	}
 }
