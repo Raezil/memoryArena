@@ -66,7 +66,10 @@ func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 	if size <= 0 {
 		return nil, fmt.Errorf("allocation size must be greater than 0")
 	}
+	return arena.AllocateBuffer(size)
+}
 
+func (arena *MemoryArena[T]) AllocateBuffer(size int) (unsafe.Pointer, error) {
 	alignment := unsafe.Alignof(new(T))
 	arena.alignOffset(alignment)
 
