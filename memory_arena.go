@@ -49,13 +49,13 @@ func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
 }
 
 // Remaining capacity of the arena
-func (arena *MemoryArena[T]) UsedCapacity(size int) int {
+func (arena *MemoryArena[T]) nextOffset(size int) int {
 	return arena.buffer.offset + size
 }
 
 // checking boundries of the arena
 func (arena *MemoryArena[T]) hasSpace(size int) bool {
-	return arena.UsedCapacity(size) > arena.buffer.size
+	return arena.nextOffset(size) > arena.buffer.size
 }
 
 // this function is used to allocate memory from the arena
