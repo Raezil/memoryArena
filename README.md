@@ -2,13 +2,30 @@
   <img src="https://github.com/user-attachments/assets/c7f6f25b-e0ce-4159-be8e-7865c6e63236">
 </p>
 
+# Memory Arena Library for Golang
 
-<h1 align="center">Memory Arena lib in Golang!</h1>
-The purpose of this package is to isolate multiple related allocations into a single area of memory, so that they can be freed all at once.
+Memory Arena Library is a Golang package that consolidates multiple related memory allocations into a single area. This design allows you to free all allocations at once, making memory management simpler and more efficient.
+
+## Features
+
+- **Grouped Memory Allocations:** Allocate related objects in one arena.
+- **Efficient Cleanup:** Free all allocations in a single operation.
+- **Concurrency Support:** Use with concurrent operations via a dedicated concurrent arena.
 
 
 
-Example
+## Installation
+
+Install the latest version with:
+
+```bash
+go get github.com/Raezil/memoryArena@latest
+```
+
+Usage Example
+
+Below is an example demonstrating how to create a memory arena, allocate objects, and free them efficiently:
+
 ```
 package main
 
@@ -35,10 +52,10 @@ func main() {
 
 }
 ```
+Testing
 
-To install 
+To run the tests, execute:
 ```
-go get github.com/Raezil/memoryArena@latest
+go test
 ```
 
-If you wish to test it, run commnad: go test
