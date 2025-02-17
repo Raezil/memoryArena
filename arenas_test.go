@@ -286,3 +286,35 @@ func TestMemoryArenaBuffer_NewMemoryArenaBuffer(t *testing.T) {
 		t.Errorf("Error: offset is not correct")
 	}
 }
+
+func TestMemoryArenaResizePreserve(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+
+	num, err := NewObject(arena, 5)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	arena.ResizePreserve(200)
+	if arena.buffer.size != 200 {
+		t.Errorf("Error: size is not preserved")
+	}
+	if *num != 5 {
+		t.Errorf("Error: object is not preserved")
+	}
+
+}
+
+func TestMemoryArenaResize(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	arena.Resize(200)
+	if arena.buffer.size != 200 {
+		t.Errorf("Error: size is not resized")
+	}
+
+}

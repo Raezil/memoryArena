@@ -111,3 +111,50 @@ func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, er
 	}
 	return ptr, nil
 }
+
+// Resize discards the old memory and reinitializes the arena with a new size.
+// All previously allocated pointers become invalid after this call!
+func (arena *MemoryArena[T]) Resize(newSize int) error {
+	if newSize <= 0 {
+		return fmt.Errorf("arena size must be greater than 0")
+	}
+	// Optionally clear the old memory (arena.Free()) if you want,
+	// but since we're discarding it anyway, you can skip if desired.
+	arena.Free()
+
+	// Allocate a new slice with the new size
+	arena.buffer.memory = make([]byte, newSize)
+	arena.buffer.size = newSize
+
+	// Reset the offset so subsequent allocations start at the beginning
+	arena.buffer.offset = 0
+
+	return nil
+}
+
+func (arena *MemoryArena[T]) ResizePreserve(newSize int) error {
+	if newSize <= 0 {
+		return fmt.Errorf("arena size must be greater than 0")
+	}
+	// Old used size
+	used := arena.buffer.offset
+	if used > newSize {
+		// Not enough room to keep old data
+		// Either return an error or shrink offset
+		return fmt.Errorf("new size is smaller than current usage")
+	}
+
+	// Create new slice
+	newMemory := make([]byte, newSize)
+	// Copy old used bytes
+	copy(newMemory, arena.buffer.memory[:used])
+
+	// Swap in new memory
+	arena.buffer.memory = newMemory
+	arena.buffer.size = newSize
+
+	// offset remains the same
+	// but all old pointer addresses are still invalid
+	// because they pointed to the old slice
+	return nil
+}
