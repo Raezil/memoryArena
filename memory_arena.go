@@ -39,12 +39,15 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	}
 	return &arena, nil
 }
+func (arena *MemoryArena[T]) SetOffset(alignment uintptr) {
+	arena.buffer.offset = (arena.buffer.offset + int(alignment-1)) &^ (int(alignment) - 1)
+}
 
 // this function aligns the offset to the specified alignment
 func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
 	remainder := arena.buffer.offset % int(alignment)
 	if remainder != 0 {
-		arena.buffer.offset = (arena.buffer.offset + int(alignment-1)) &^ (int(alignment) - 1)
+		arena.SetOffset(alignment)
 	}
 }
 
