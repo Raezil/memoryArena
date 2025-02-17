@@ -318,3 +318,45 @@ func TestMemoryArenaResize(t *testing.T) {
 	}
 
 }
+
+func TestMemoryArenaAllocate(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	ptr, err := arena.Allocate(10)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	if ptr == nil {
+		t.Errorf("Error: ptr is nil")
+	}
+
+}
+
+func TestMemoryArenaAllocateBuffer(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	ptr, err := arena.AllocateBuffer(10)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	if ptr == nil {
+		t.Errorf("Error: ptr is nil")
+	}
+
+}
+
+func TestMemoryArena_AllocateNewValue(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	obj := 5
+	_, err = arena.AllocateNewValue(10, obj)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+}
