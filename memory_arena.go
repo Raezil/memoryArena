@@ -40,6 +40,7 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	return &arena, nil
 }
 
+// this function sets the offset of the arena to the specified alignment
 func (arena *MemoryArena[T]) SetOffset(alignment uintptr) {
 	arena.buffer.offset = (arena.buffer.offset + int(alignment-1)) &^ (int(alignment) - 1)
 }
