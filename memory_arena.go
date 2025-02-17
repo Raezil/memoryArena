@@ -95,10 +95,7 @@ func (arena *MemoryArena[T]) Reset() {
 	arena.buffer.offset = 0
 }
 
-// AllocateObject allocates memory for the given object and returns a pointer to the allocated memory.
-func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
-	size := reflect.TypeOf(obj).Size()
-	// Allocate memory
+func (arena *MemoryArena[T]) AllocateNewValue(size int, obj interface{}) (*unsafe.Pointer, error) {
 	ptr, err := arena.Allocate(int(size))
 	if err != nil {
 		return nil, fmt.Errorf("allocation failed due to insufficient memory")
@@ -109,7 +106,18 @@ func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, er
 	if err != nil {
 		return nil, err
 	}
-	return ptr, nil
+	return &ptr, nil
+}
+
+// AllocateObject allocates memory for the given object and returns a pointer to the allocated memory.
+func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
+	size := int(reflect.TypeOf(obj).Size())
+	// Allocate memory
+	ptr, err := arena.AllocateNewValue(size, obj)
+	if err != nil {
+		return nil, err
+	}
+	return *ptr, nil
 }
 
 // Resize discards the old memory and reinitializes the arena with a new size.
