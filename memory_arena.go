@@ -91,8 +91,8 @@ func (arena *MemoryArena[T]) Free() {
 
 // this function resets the arena by setting the offset to 0
 func (arena *MemoryArena[T]) Reset() {
-	arena.buffer.offset = 0
 	arena.Free()
+	arena.buffer.offset = 0
 }
 
 // AllocateObject allocates memory for the given object and returns a pointer to the allocated memory.
