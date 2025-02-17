@@ -55,3 +55,15 @@ func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer
 	}
 	return ptr, nil
 }
+
+func (arena *ConcurrentArena[T]) ResizePreserve(newSize int) error {
+	arena.mutex.Lock()
+	defer arena.mutex.Unlock()
+	return arena.MemoryArena.ResizePreserve(newSize)
+}
+
+func (arena *ConcurrentArena[T]) Resize(newSize int) error {
+	arena.mutex.Lock()
+	defer arena.mutex.Unlock()
+	return arena.MemoryArena.Resize(newSize)
+}
