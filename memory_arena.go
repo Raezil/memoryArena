@@ -45,9 +45,14 @@ func (arena *MemoryArena[T]) SetOffset(alignment uintptr) {
 	arena.buffer.offset = (arena.buffer.offset + int(alignment-1)) &^ (int(alignment) - 1)
 }
 
+// this function returns the remainder of the offset when divided by the alignment
+func (arena *MemoryArena[T]) GetRemainder(alignment uintptr) int {
+	return arena.buffer.offset % int(alignment)
+}
+
 // this function aligns the offset to the specified alignment
 func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
-	remainder := arena.buffer.offset % int(alignment)
+	remainder := arena.GetRemainder(alignment)
 	if remainder != 0 {
 		arena.SetOffset(alignment)
 	}
@@ -71,6 +76,11 @@ func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 	return arena.AllocateBuffer(size)
 }
 
+// this function returns a pointer to the memory in the arena
+func (arena *MemoryArena[T]) GetResult() unsafe.Pointer {
+	return unsafe.Pointer(&arena.buffer.memory[arena.buffer.offset])
+}
+
 // it checks if there's enough space left in the arena
 // if there is enough space, it returns a pointer to the available memory and updates the used amount
 // if there is not enough space, it returns null(or some error indicator)
@@ -82,7 +92,7 @@ func (arena *MemoryArena[T]) AllocateBuffer(size int) (unsafe.Pointer, error) {
 		return nil, fmt.Errorf("not enough space left in the arena")
 	}
 
-	result := unsafe.Pointer(&arena.buffer.memory[arena.buffer.offset])
+	result := arena.GetResult()
 	arena.buffer.offset += size
 	return result, nil
 }
