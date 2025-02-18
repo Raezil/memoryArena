@@ -357,9 +357,12 @@ func TestMemoryArena_AllocateNewValue(t *testing.T) {
 		t.Errorf("Error: %v", err)
 	}
 	obj := 5
-	_, err = arena.AllocateNewValue(10, obj)
+	ptr, err := arena.AllocateNewValue(10, obj)
 	if err != nil {
 		t.Errorf("Error: %v", err)
+	}
+	if ptr == nil {
+		t.Errorf("Error: ptr is nil")
 	}
 }
 
