@@ -162,17 +162,14 @@ func (arena *MemoryArena[T]) ResizePreserve(newSize int) error {
 		return fmt.Errorf("new size is smaller than current usage")
 	}
 
-	// Create new slice
+	arena.SetNewMemory(newSize, used)
+	return nil
+}
+
+func (arena *MemoryArena[T]) SetNewMemory(newSize int, used int) {
 	newMemory := make([]byte, newSize)
 	// Copy old used bytes
 	copy(newMemory, arena.buffer.memory[:used])
-
-	// Swap in new memory
 	arena.buffer.memory = newMemory
 	arena.buffer.size = newSize
-
-	// offset remains the same
-	// but all old pointer addresses are still invalid
-	// because they pointed to the old slice
-	return nil
 }
