@@ -55,8 +55,8 @@ func InsertMap[T any](obj *T, arena Arena, hashmap *map[string]T, key string) (*
 
 // SetNewValue sets new value to pointer.
 func SetNewValue(ptr *unsafe.Pointer, obj interface{}) (unsafe.Pointer, error) {
-	if ptr == nil {
-		return nil, fmt.Errorf("pointer is equal nil")
+	if ptr == nil || *ptr == nil {
+		return nil, fmt.Errorf("invalid pointer provided")
 	}
 	newValue := reflect.NewAt(
 		reflect.TypeOf(obj),

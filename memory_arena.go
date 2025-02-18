@@ -49,7 +49,8 @@ func (arena *MemoryArena[T]) GetRemainder(alignment uintptr) int {
 func (arena *MemoryArena[T]) alignOffset(alignment uintptr) {
 	remainder := arena.GetRemainder(alignment)
 	if remainder != 0 {
-		arena.buffer.offset = (arena.buffer.offset + int(alignment-1)) &^ (int(alignment) - 1)
+		misalignment := (arena.buffer.offset + int(alignment-1))
+		arena.buffer.offset = misalignment &^ (int(alignment) - 1)
 	}
 }
 
