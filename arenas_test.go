@@ -1,6 +1,8 @@
 package memoryArena
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestMemoryArena(t *testing.T) {
 	arena, err := NewMemoryArena[int](100)
@@ -358,5 +360,16 @@ func TestMemoryArena_AllocateNewValue(t *testing.T) {
 	_, err = arena.AllocateNewValue(10, obj)
 	if err != nil {
 		t.Errorf("Error: %v", err)
+	}
+}
+
+func TestMemoryArena_GetResult(t *testing.T) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Errorf("Error: %v", err)
+	}
+	ptr := arena.GetResult()
+	if ptr == nil {
+		t.Errorf("Error: ptr is nil")
 	}
 }
