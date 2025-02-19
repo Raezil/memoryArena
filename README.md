@@ -22,7 +22,7 @@ Install the latest version with:
 go get github.com/Raezil/memoryArena@latest
 ```
 
-Usage Example
+# Usage Example
 
 Below is an example demonstrating how to create a memory arena, allocate objects, and free them efficiently:
 
@@ -51,7 +51,7 @@ func main() {
 
 }
 ```
-Testing
+# Testing
 
 To run the tests, execute:
 ```
