@@ -12,12 +12,11 @@ type Person struct {
 }
 
 func main() {
-	arena, err := NewMemoryArena[[]Person](512)
+	arena, err := NewConcurrentArena[[]Person](100)
 	if err != nil {
 		fmt.Printf(err.Error())
 	}
-	concurrentArena := NewConcurrentArena[[]Person](*arena)
-	obj, _ := NewObject[[]Person](concurrentArena, []Person{Person{"Kamil", 27}, Person{"Lukasz", 28}})
+	obj, _ := NewObject[[]Person](arena, []Person{Person{"Kamil", 27}, Person{"Lukasz", 28}})
 	defer Reset(arena)
 	fmt.Println(obj)
 

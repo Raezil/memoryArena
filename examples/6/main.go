@@ -12,21 +12,20 @@ type Person struct {
 }
 
 func main() {
-	arena, err := NewMemoryArena[Person](72)
-	concurentArena := NewConcurrentArena(*arena)
+	arena, err := NewConcurrentArena[Person](72)
 	if err != nil {
 		fmt.Println(err)
 	}
-	person, err := NewObject(concurentArena, Person{"John", 30})
+	person, err := NewObject(arena, Person{"John", 30})
 	if err != nil {
 		fmt.Println(err)
 	}
-	person1, err := NewObject(concurentArena, Person{"Kamil", 27})
+	person1, err := NewObject(arena, Person{"Kamil", 27})
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	person2, err := NewObject(concurentArena, Person{"Lukasz", 28})
+	person2, err := NewObject(arena, Person{"Lukasz", 28})
 	if err != nil {
 		fmt.Println(err)
 	}
