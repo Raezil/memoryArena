@@ -199,3 +199,93 @@ func BenchmarkMemoryArena_AllocateObject(b *testing.B) {
 		}
 	}
 }
+
+func BenchmarkMemoryArena_AllocateNewValue(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	obj := 5
+	for i := 0; i < b.N; i++ {
+		_, err = arena.AllocateNewValue(10, obj)
+		if err != nil {
+			b.Errorf("Error: %v", err)
+		}
+	}
+}
+
+func BenchmarkMemoryArena_AllocateBuffer(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	for i := 0; i < b.N; i++ {
+		_, err = arena.AllocateBuffer(10)
+		if err != nil {
+			b.Errorf("Error: %v", err)
+		}
+	}
+}
+
+func BenchmarkMemoryArena_Allocate(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	for i := 0; i < b.N; i++ {
+		_, err = arena.Allocate(10)
+		if err != nil {
+			b.Errorf("Error: %v", err)
+		}
+	}
+}
+
+func BenchmarkMemoryArena_Reset(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	for i := 0; i < b.N; i++ {
+		arena.Reset()
+	}
+}
+
+func BenchmarkMemoryArena_Free(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	for i := 0; i < b.N; i++ {
+		arena.Free()
+	}
+}
+
+func BenchmarkMemoryArena_GetResult(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	for i := 0; i < b.N; i++ {
+		arena.GetResult()
+	}
+}
+
+func BenchmarkMemoryArena_ResizePreserve(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	for i := 0; i < b.N; i++ {
+		arena.ResizePreserve(200)
+	}
+}
+
+func BenchmarkMemoryArena_Resize(b *testing.B) {
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		b.Errorf("Error: %v", err)
+	}
+	for i := 0; i < b.N; i++ {
+		arena.Resize(200)
+	}
+}
