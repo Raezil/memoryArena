@@ -14,11 +14,15 @@ type ConcurrentArena[T any] struct {
 }
 
 // Constructor of ConcurrentArena
-func NewConcurrentArena[T any](arena MemoryArena[T]) *ConcurrentArena[T] {
-	return &ConcurrentArena[T]{
-		MemoryArena: &arena,
-		mutex:       sync.RWMutex{},
+func NewConcurrentArena[T any](size int) (*ConcurrentArena[T], error) {
+	arena, err := NewMemoryArena[T](size)
+	if err != nil {
+		return nil, err
 	}
+	return &ConcurrentArena[T]{
+		MemoryArena: arena,
+		mutex:       sync.RWMutex{},
+	}, nil
 }
 
 // Allocating object in conccurrent arena

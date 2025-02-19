@@ -5,12 +5,11 @@ import (
 )
 
 func TestConcurrentArena(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	concurrentArena := NewConcurrentArena(*arena)
-	ptr, err := concurrentArena.Allocate(10)
+	ptr, err := arena.Allocate(10)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
@@ -20,24 +19,22 @@ func TestConcurrentArena(t *testing.T) {
 
 }
 func TestConcurrentArena_AllocateObject(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	concurrentArena := NewConcurrentArena(*arena)
 	obj := 5
-	_, err = concurrentArena.AllocateObject(obj)
+	_, err = arena.AllocateObject(obj)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
 }
 
 func TestConcurrentArena_Free(t *testing.T) {
-	memoryarena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		t.Errorf("Error: %v", err)
 	}
-	arena := NewConcurrentArena[int](*memoryarena)
 	arena.Free()
 
 	for i := range arena.buffer.memory {
@@ -48,14 +45,13 @@ func TestConcurrentArena_Free(t *testing.T) {
 }
 
 func BenchmarkConcurrentArena_AllocateObject(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		b.Errorf("Error: %v", err)
 	}
-	concurrentArena := NewConcurrentArena(*arena)
 	obj := 5
 	for i := 0; i < b.N; i++ {
-		_, err = concurrentArena.AllocateObject(obj)
+		_, err = arena.AllocateObject(obj)
 		if err != nil {
 			b.Errorf("Error: %v", err)
 		}
@@ -63,14 +59,13 @@ func BenchmarkConcurrentArena_AllocateObject(b *testing.B) {
 }
 
 func BenchmarkConcurrentArena_AllocateNewValue(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		b.Errorf("Error: %v", err)
 	}
-	concurrentArena := NewConcurrentArena(*arena)
 	obj := 5
 	for i := 0; i < b.N; i++ {
-		_, err = concurrentArena.AllocateNewValue(10, obj)
+		_, err = arena.AllocateNewValue(10, obj)
 		if err != nil {
 			b.Errorf("Error: %v", err)
 		}
@@ -78,13 +73,12 @@ func BenchmarkConcurrentArena_AllocateNewValue(b *testing.B) {
 }
 
 func BenchmarkConcurrentArena_Allocate(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		b.Errorf("Error: %v", err)
 	}
-	concurrentArena := NewConcurrentArena(*arena)
 	for i := 0; i < b.N; i++ {
-		_, err = concurrentArena.Allocate(10)
+		_, err = arena.Allocate(10)
 		if err != nil {
 			b.Errorf("Error: %v", err)
 		}
@@ -92,13 +86,12 @@ func BenchmarkConcurrentArena_Allocate(b *testing.B) {
 }
 
 func BenchmarkConcurrentArena_ResizePreserve(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		b.Errorf("Error: %v", err)
 	}
-	concurrentArena := NewConcurrentArena(*arena)
 	for i := 0; i < b.N; i++ {
-		err = concurrentArena.ResizePreserve(100)
+		err = arena.ResizePreserve(100)
 		if err != nil {
 			b.Errorf("Error: %v", err)
 		}
@@ -106,13 +99,12 @@ func BenchmarkConcurrentArena_ResizePreserve(b *testing.B) {
 }
 
 func BenchmarkConcurrentArena_Resize(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		b.Errorf("Error: %v", err)
 	}
-	concurrentArena := NewConcurrentArena(*arena)
 	for i := 0; i < b.N; i++ {
-		err = concurrentArena.Resize(100)
+		err = arena.Resize(100)
 		if err != nil {
 			b.Errorf("Error: %v", err)
 		}
@@ -120,33 +112,30 @@ func BenchmarkConcurrentArena_Resize(b *testing.B) {
 }
 
 func BenchmarkConcurrentArena_Free(b *testing.B) {
-	memoryarena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		b.Errorf("Error: %v", err)
 	}
-	arena := NewConcurrentArena[int](*memoryarena)
 	for i := 0; i < b.N; i++ {
 		arena.Free()
 	}
 }
 
 func BenchmarkConcurrentArena_GetResult(b *testing.B) {
-	memoryarena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		b.Errorf("Error: %v", err)
 	}
-	arena := NewConcurrentArena[int](*memoryarena)
 	for i := 0; i < b.N; i++ {
 		arena.GetResult()
 	}
 }
 
 func BenchmarkConcurrentArena_Reset(b *testing.B) {
-	memoryarena, err := NewMemoryArena[int](100)
+	arena, err := NewConcurrentArena[int](100)
 	if err != nil {
 		b.Errorf("Error: %v", err)
 	}
-	arena := NewConcurrentArena[int](*memoryarena)
 	for i := 0; i < b.N; i++ {
 		arena.Reset()
 	}
