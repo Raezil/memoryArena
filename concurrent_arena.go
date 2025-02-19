@@ -17,6 +17,7 @@ type ConcurrentArena[T any] struct {
 func NewConcurrentArena[T any](arena MemoryArena[T]) *ConcurrentArena[T] {
 	return &ConcurrentArena[T]{
 		MemoryArena: &arena,
+		mutex:       sync.RWMutex{},
 	}
 }
 
