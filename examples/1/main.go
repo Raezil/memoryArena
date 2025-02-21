@@ -17,7 +17,7 @@ func main() {
 		fmt.Printf(err.Error())
 	}
 	obj, _ := NewObject[[]Person](arena, []Person{Person{"Kamil", 27}, Person{"Lukasz", 28}})
-	defer Reset(arena)
+	defer arena.Reset()
 	fmt.Println(obj)
 
 }

@@ -26,5 +26,5 @@ func main() {
 	}
 	fmt.Println(*person)
 	fmt.Println(*person1)
-	defer Reset(arena)
+	defer arena.Reset()
 }
