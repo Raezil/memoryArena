@@ -1,119 +1,94 @@
 package memoryArena
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestNewObject(t *testing.T) {
 	arena, err := NewMemoryArena[int](100)
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		t.Fatalf("Error creating arena: %v", err)
 	}
 	obj := 5
-	_, err = NewObject(arena, obj)
+	p, err := NewObject(arena, obj)
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		t.Fatalf("Error creating new object: %v", err)
+	}
+	if p == nil || *p != obj {
+		t.Fatalf("Expected object %d, got %v", obj, p)
 	}
 }
 
 func TestAppendSlice(t *testing.T) {
+	// Create an arena for slices of int.
 	arena, err := NewMemoryArena[[]int](100)
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		t.Fatalf("Error creating arena: %v", err)
 	}
-	obj := 5
-	slice := []int{1, 2, 3}
-	_, err = AppendSlice(&obj, arena, &slice)
+	initialSlice := []int{1, 2, 3}
+	element := 5
+	newSlicePtr, err := AppendSlice(arena, element, initialSlice)
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		t.Fatalf("Error appending slice: %v", err)
+	}
+	if newSlicePtr == nil {
+		t.Fatalf("New slice pointer is nil")
+	}
+	if len(*newSlicePtr) != len(initialSlice)+1 {
+		t.Errorf("Expected slice length %d, got %d", len(initialSlice)+1, len(*newSlicePtr))
 	}
 }
 
 func BenchmarkAppendSlice(b *testing.B) {
-	arena, err := NewMemoryArena[[]int](100)
+	arena, err := NewMemoryArena[[]int](1000)
 	if err != nil {
-		b.Errorf("Error: %v", err)
+		b.Fatalf("Error creating arena: %v", err)
 	}
-	obj := 5
-	slice := []int{1, 2, 3}
+	initialSlice := []int{1, 2, 3}
+	element := 5
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = AppendSlice(&obj, arena, &slice)
+		_, err = AppendSlice(arena, element, initialSlice)
 		if err != nil {
-			b.Errorf("Error: %v", err)
-		}
-	}
-}
-
-func TestSetNewValue(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	obj := 5
-	ptr, err := arena.Allocate(10)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	ptr, _ = SetNewValue(&ptr, obj)
-	if ptr == nil {
-		t.Errorf("Error: ptr is nil")
-	}
-}
-
-func BenchmarkSetNewValue(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	obj := 5
-	ptr, err := arena.Allocate(10)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	for i := 0; i < b.N; i++ {
-		ptr, _ = SetNewValue(&ptr, obj)
-		if ptr == nil {
-			b.Errorf("Error: ptr is nil")
-		}
-	}
-}
-
-func BenchmarkNewObject(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	obj := 5
-	for i := 0; i < b.N; i++ {
-		_, err = NewObject(arena, obj)
-		if err != nil {
-			b.Errorf("Error: %v", err)
+			b.Fatalf("Error appending slice: %v", err)
 		}
 	}
 }
 
 func TestInsertMap(t *testing.T) {
+	// Create an arena for map[string]int.
 	arena, err := NewMemoryArena[map[string]int](100)
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		t.Fatalf("Error creating arena: %v", err)
 	}
-	obj := 4
-	slice := map[string]int{"1": 1, "2": 2, "3": 3}
-	_, err = InsertMap(&obj, arena, &slice, "4")
+	initialMap := map[string]int{"a": 1, "b": 2}
+	key := "c"
+	value := 3
+	newMapPtr, err := InsertMap(arena, key, value, initialMap)
 	if err != nil {
-		t.Errorf("Error: %v", err)
+		t.Fatalf("Error inserting into map: %v", err)
+	}
+	if newMapPtr == nil {
+		t.Fatalf("New map pointer is nil")
+	}
+	if (*newMapPtr)[key] != value {
+		t.Errorf("Expected key %s to have value %d, got %d", key, value, (*newMapPtr)[key])
 	}
 }
 
 func BenchmarkInsertMap(b *testing.B) {
-	arena, err := NewMemoryArena[map[string]int](100)
+	arena, err := NewMemoryArena[map[string]int](1000)
 	if err != nil {
-		b.Errorf("Error: %v", err)
+		b.Fatalf("Error creating arena: %v", err)
 	}
-	obj := 4
-	slice := map[string]int{"1": 1, "2": 2, "3": 3}
+	initialMap := map[string]int{"a": 1, "b": 2}
+	key := "c"
+	value := 3
+	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err = InsertMap(&obj, arena, &slice, "4")
+		_, err = InsertMap(arena, key, value, initialMap)
 		if err != nil {
-			b.Errorf("Error: %v", err)
+			b.Fatalf("Error inserting into map: %v", err)
 		}
 	}
 }

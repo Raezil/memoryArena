@@ -1,19 +1,17 @@
 package memoryArena
 
 import (
-	"fmt"
-	"reflect"
 	"sync"
 	"unsafe"
 )
 
+// ConcurrentArena wraps MemoryArena with a mutex for thread-safe operations.
 type ConcurrentArena[T any] struct {
-	// embedding MemoryArena type in ConcurrentArena
 	*MemoryArena[T]
 	mutex sync.RWMutex
 }
 
-// Constructor of ConcurrentArena
+// NewConcurrentArena creates a new ConcurrentArena.
 func NewConcurrentArena[T any](size int) (*ConcurrentArena[T], error) {
 	arena, err := NewMemoryArena[T](size)
 	if err != nil {
@@ -25,50 +23,51 @@ func NewConcurrentArena[T any](size int) (*ConcurrentArena[T], error) {
 	}, nil
 }
 
-// Allocating object in conccurrent arena
+// Allocate performs a thread-safe allocation.
 func (arena *ConcurrentArena[T]) Allocate(size int) (unsafe.Pointer, error) {
-	ptr, err := arena.MemoryArena.Allocate(size)
-	if err != nil {
-		return nil, err
-	}
-	return ptr, nil
+	arena.mutex.Lock()
+	defer arena.mutex.Unlock()
+	return arena.MemoryArena.Allocate(size)
 }
 
-// Resetting concurrent arena
+// AllocateNewValue performs a thread-safe allocation of a new value.
+func (arena *ConcurrentArena[T]) AllocateNewValue(obj T) (*T, error) {
+	arena.mutex.Lock()
+	defer arena.mutex.Unlock()
+	return arena.MemoryArena.AllocateNewValue(obj)
+}
+
+// Reset safely resets the arena.
 func (arena *ConcurrentArena[T]) Reset() {
 	arena.mutex.Lock()
 	defer arena.mutex.Unlock()
 	arena.MemoryArena.Reset()
 }
 
-// Object is being allocated in the Concurrent Arena.
-func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
+// Free safely frees the arena.
+func (arena *ConcurrentArena[T]) Free() {
 	arena.mutex.Lock()
 	defer arena.mutex.Unlock()
-	// Get the size of the object
-	size := reflect.TypeOf(obj).Size()
-	// Allocate memory
-	ptr, err := arena.Allocate(int(size))
-	if err != nil {
-		return nil, fmt.Errorf("allocation failed due to insufficient memory")
-	}
-
-	// Create a new value at the allocated memory and copy the object into it
-	ptr, err = SetNewValue(&ptr, obj)
-	if err != nil {
-		return nil, err
-	}
-	return ptr, nil
+	arena.MemoryArena.Free()
 }
 
+// ResizePreserve safely resizes the arena while preserving data.
 func (arena *ConcurrentArena[T]) ResizePreserve(newSize int) error {
 	arena.mutex.Lock()
 	defer arena.mutex.Unlock()
 	return arena.MemoryArena.ResizePreserve(newSize)
 }
 
+// Resize safely resizes the arena.
 func (arena *ConcurrentArena[T]) Resize(newSize int) error {
 	arena.mutex.Lock()
 	defer arena.mutex.Unlock()
 	return arena.MemoryArena.Resize(newSize)
+}
+
+// GetResult safely retrieves the result pointer.
+func (arena *ConcurrentArena[T]) GetResult() unsafe.Pointer {
+	arena.mutex.RLock()
+	defer arena.mutex.RUnlock()
+	return arena.MemoryArena.GetResult()
 }

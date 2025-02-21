@@ -31,8 +31,9 @@ package main
 
 import (
 	"fmt"
+	"log"
 
-	. "github.com/Raezil/memoryArena"
+	"github.com/Raezil/memoryArena"
 )
 
 type Person struct {
@@ -41,14 +42,28 @@ type Person struct {
 }
 
 func main() {
-	arena, err := NewConcurrentArena[[]Person](100)
+	// Create a new concurrent arena for a slice of Person.
+	arena, err := memoryArena.NewConcurrentArena[[]Person](100)
 	if err != nil {
-		return
+		log.Fatalf("failed to create arena: %v", err)
 	}
-	obj, _ := NewObject[[]Person](arena, []Person{Person{"Kamil", 27}, Person{"Lukasz", 28}})
-	defer Reset(arena)
-	fmt.Println(obj)
+	// Ensure the arena is reset at the end.
+	defer arena.Reset()
 
+	// Define a slice of Person.
+	persons := []Person{
+		{"Kamil", 27},
+		{"Lukasz", 28},
+	}
+
+	// Allocate the slice in the arena.
+	allocatedPersons, err := arena.AllocateNewValue(persons)
+	if err != nil {
+		log.Fatalf("failed to allocate persons: %v", err)
+	}
+
+	// Print the allocated slice.
+	fmt.Printf("Allocated persons: %+v\n", *allocatedPersons)
 }
 ```
 # Testing
