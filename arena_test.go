@@ -42,40 +42,6 @@ func BenchmarkAppendSlice(b *testing.B) {
 	}
 }
 
-func TestSetNewValue(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	obj := 5
-	ptr, err := arena.Allocate(10)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	ptr, _ = SetNewValue(&ptr, obj)
-	if ptr == nil {
-		t.Errorf("Error: ptr is nil")
-	}
-}
-
-func BenchmarkSetNewValue(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	obj := 5
-	ptr, err := arena.Allocate(10)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	for i := 0; i < b.N; i++ {
-		ptr, _ = SetNewValue(&ptr, obj)
-		if ptr == nil {
-			b.Errorf("Error: ptr is nil")
-		}
-	}
-}
-
 func BenchmarkNewObject(b *testing.B) {
 	arena, err := NewMemoryArena[int](100)
 	if err != nil {

@@ -1,28 +1,26 @@
 package memoryArena
 
 import (
-	"fmt"
-	"reflect"
 	"unsafe"
 )
 
-// interface for MemoryArena and ConcurrentArena behaviours
+// Arena defines the common behavior for memory arenas.
 type Arena interface {
 	Reset()
 	AllocateObject(obj interface{}) (unsafe.Pointer, error)
 }
 
-// Object is being allocated in the Arena.
+// AllocateObject allocates an object in the Arena.
 func AllocateObject[T any](arena Arena, obj T) (unsafe.Pointer, error) {
 	return arena.AllocateObject(obj)
 }
 
-// Resetting the Arena.
+// Reset resets the Arena.
 func Reset(arena Arena) {
 	arena.Reset()
 }
 
-// NewObject allocate memory through AllocateObject, returns pointer to T or error handle.
+// NewObject allocates memory for an object, returning a pointer or an error.
 func NewObject[T any](arena Arena, obj T) (*T, error) {
 	ptr, err := AllocateObject(arena, obj)
 	if err != nil {
@@ -31,37 +29,24 @@ func NewObject[T any](arena Arena, obj T) (*T, error) {
 	return (*T)(ptr), nil
 }
 
-// AppendSlice appends object to slice and returns pointer to slice or error handle.
+// AppendSlice appends an object to a slice and allocates space for the updated slice.
 func AppendSlice[T any](obj *T, arena Arena, slice *[]T) (*[]T, error) {
 	*slice = append(*slice, *obj)
-	ptr, err := AllocateObject(arena, slice)
+	// Pass the dereferenced slice so that AllocateObject sees []T (matching the arena’s type)
+	ptr, err := AllocateObject(arena, *slice)
 	if err != nil {
 		return nil, err
 	}
 	return (*[]T)(ptr), nil
-
 }
 
-// InsertMap inserts object to hashmap and returns pointer to hashmap or error handle.
+// InsertMap inserts an object into a map under a given key and allocates space for the updated map.
 func InsertMap[T any](obj *T, arena Arena, hashmap *map[string]T, key string) (*map[string]T, error) {
 	(*hashmap)[key] = *obj
-	ptr, err := AllocateObject(arena, hashmap)
+	// Pass the dereferenced map so that AllocateObject sees map[string]T
+	ptr, err := AllocateObject(arena, *hashmap)
 	if err != nil {
 		return nil, err
 	}
 	return (*map[string]T)(ptr), nil
-
-}
-
-// SetNewValue sets new value to pointer.
-func SetNewValue(ptr *unsafe.Pointer, obj interface{}) (unsafe.Pointer, error) {
-	if ptr == nil || *ptr == nil {
-		return nil, fmt.Errorf("invalid pointer provided")
-	}
-	newValue := reflect.NewAt(
-		reflect.TypeOf(obj),
-		*ptr,
-	).Elem()
-	newValue.Set(reflect.ValueOf(obj))
-	return *ptr, nil
 }

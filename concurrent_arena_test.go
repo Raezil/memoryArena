@@ -140,3 +140,37 @@ func BenchmarkConcurrentArena_Reset(b *testing.B) {
 		arena.Reset()
 	}
 }
+
+// Test that ConcurrentArena AllocateObject returns an error when given a wrong type.
+func TestConcurrentArena_AllocateObject_WrongType(t *testing.T) {
+	arena, err := NewConcurrentArena[int](10)
+	if err != nil {
+		t.Fatalf("Failed to create concurrent arena: %v", err)
+	}
+	_, err = arena.AllocateObject("wrong type")
+	if err == nil {
+		t.Error("Expected error when allocating object with wrong type in concurrent arena, got nil")
+	}
+}
+
+// Test that ConcurrentArena Reset works correctly when called concurrently.
+func TestConcurrentArena_Reset_Concurrent(t *testing.T) {
+	arena, err := NewConcurrentArena[int](10)
+	if err != nil {
+		t.Fatalf("Failed to create concurrent arena: %v", err)
+	}
+	// Allocate some data.
+	_, err = arena.Allocate(10)
+	if err != nil {
+		t.Fatalf("Allocation failed: %v", err)
+	}
+	done := make(chan bool)
+	go func() {
+		arena.Reset()
+		done <- true
+	}()
+	<-done
+	if arena.buffer.offset != 0 {
+		t.Error("Expected offset 0 after concurrent reset")
+	}
+}
