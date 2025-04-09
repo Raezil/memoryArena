@@ -4,7 +4,6 @@
 
 # Memory Arena Library for Golang
 [![Go Report Card](https://goreportcard.com/badge/github.com/Raezil/memoryArena)](https://goreportcard.com/report/github.com/Raezil/memoryArena)
-[![Coverage](https://img.shields.io/badge/coverage-90.7%25-brightgreen.svg)](https://your-ci-or-coverage-report-url)
 
 Memory Arena Library is a Golang package that consolidates multiple related memory allocations into a single area. This design allows you to free all allocations at once, making memory management simpler and more efficient.
 
