@@ -66,7 +66,7 @@ func (arena *MemoryArena[T]) AllocateBuffer(size int) (unsafe.Pointer, error) {
 	alignment := unsafe.Alignof(new(T))
 	arena.alignOffset(alignment)
 	if arena.notEnoughSpace(size) {
-		return nil, fmt.Errorf("not enough space left in the arena")
+		return nil, ErrArenaFull
 	}
 	result := arena.GetResult()
 	arena.buffer.offset += size
@@ -88,7 +88,7 @@ func (arena *MemoryArena[T]) Reset() {
 func (arena *MemoryArena[T]) AllocateNewValue(size int, obj T) (*unsafe.Pointer, error) {
 	ptr, err := arena.Allocate(size)
 	if err != nil {
-		return nil, fmt.Errorf("allocation failed due to insufficient memory")
+		return nil, err
 	}
 	*(*T)(ptr) = obj
 	return &ptr, nil
@@ -98,7 +98,7 @@ func (arena *MemoryArena[T]) AllocateNewValue(size int, obj T) (*unsafe.Pointer,
 func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
 	value, ok := obj.(T)
 	if !ok {
-		return nil, fmt.Errorf("invalid type: expected %T", *new(T))
+		return nil, ErrInvalidType
 	}
 	size := int(unsafe.Sizeof(value))
 	ptr, err := arena.AllocateNewValue(size, value)
@@ -110,7 +110,7 @@ func (arena *MemoryArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, er
 
 func (arena *MemoryArena[T]) Resize(newSize int) error {
 	if newSize <= 0 {
-		return fmt.Errorf("arena size must be greater than 0")
+		return ErrInvalidSize
 	}
 	arena.Free()
 	arena.buffer.memory = make([]byte, newSize)
@@ -121,11 +121,11 @@ func (arena *MemoryArena[T]) Resize(newSize int) error {
 
 func (arena *MemoryArena[T]) ResizePreserve(newSize int) error {
 	if newSize <= 0 {
-		return fmt.Errorf("arena size must be greater than 0")
+		return ErrInvalidSize
 	}
 	used := arena.buffer.offset
 	if used > newSize {
-		return fmt.Errorf("new size is smaller than current usage")
+		return ErrNewSizeTooSmall
 	}
 	arena.SetNewMemory(newSize, used)
 	return nil

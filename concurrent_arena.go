@@ -1,7 +1,6 @@
 package memoryArena
 
 import (
-	"fmt"
 	"sync"
 	"unsafe"
 )
@@ -39,12 +38,12 @@ func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer
 	// Ensure the object is of the expected type.
 	value, ok := obj.(T)
 	if !ok {
-		return nil, fmt.Errorf("invalid type: expected %T", *new(T))
+		return nil, ErrInvalidType
 	}
 	size := int(unsafe.Sizeof(value))
 	ptr, err := arena.Allocate(size)
 	if err != nil {
-		return nil, fmt.Errorf("allocation failed due to insufficient memory")
+		return nil, err
 	}
 	// Directly copy the value into the allocated memory.
 	*(*T)(ptr) = value
