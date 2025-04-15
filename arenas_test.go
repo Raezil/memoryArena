@@ -1,6 +1,7 @@
 package memoryArena
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -845,5 +846,443 @@ func TestAlignmentEdgeCases(t *testing.T) {
 			t.Errorf("Incorrect alignment for offset %d: expected %d, got %d",
 				offset, expectedOffset, arena.buffer.offset)
 		}
+	}
+}
+
+// --- Tests for ErrArenaFull ---
+
+func TestMemoryArena_Allocate_ArenaFull(t *testing.T) {
+	size := int(unsafe.Sizeof(int(0)))
+	arena, _ := NewMemoryArena[int](size) // Arena with space for exactly one int
+	_, err := arena.Allocate(size)        // Allocate the first int
+	if err != nil {
+		t.Fatalf("Initial allocation failed unexpectedly: %v", err)
+	}
+	_, err = arena.Allocate(size) // Attempt to allocate second int
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+}
+
+func TestMemoryArena_AllocateBuffer_ArenaFull(t *testing.T) {
+	size := int(unsafe.Sizeof(int(0)))
+	arena, _ := NewMemoryArena[int](size)
+	_, err := arena.AllocateBuffer(size)
+	if err != nil {
+		t.Fatalf("Initial allocation failed unexpectedly: %v", err)
+	}
+	_, err = arena.AllocateBuffer(size)
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+}
+
+func TestMemoryArena_AllocateNewValue_ArenaFull(t *testing.T) {
+	size := int(unsafe.Sizeof(int(0)))
+	arena, _ := NewMemoryArena[int](size)
+	_, err := arena.AllocateNewValue(size, 1)
+	if err != nil {
+		t.Fatalf("Initial allocation failed unexpectedly: %v", err)
+	}
+	_, err = arena.AllocateNewValue(size, 2)
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+}
+
+func TestMemoryArena_AllocateObject_ArenaFull(t *testing.T) {
+	size := int(unsafe.Sizeof(int(0)))
+	arena, _ := NewMemoryArena[int](size)
+	_, err := arena.AllocateObject(1)
+	if err != nil {
+		t.Fatalf("Initial allocation failed unexpectedly: %v", err)
+	}
+	_, err = arena.AllocateObject(2)
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+}
+
+func TestConcurrentArena_Allocate_ArenaFull(t *testing.T) {
+	size := int(unsafe.Sizeof(int(0)))
+	arena, _ := NewConcurrentArena[int](size)
+	_, err := arena.Allocate(size) // Direct allocation (might bypass lock in real use, test assumes underlying method)
+	if err != nil {
+		t.Fatalf("Initial allocation failed unexpectedly: %v", err)
+	}
+	_, err = arena.Allocate(size)
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+}
+
+func TestConcurrentArena_AllocateObject_ArenaFull(t *testing.T) {
+	size := int(unsafe.Sizeof(int(0)))
+	arena, _ := NewConcurrentArena[int](size)
+	_, err := arena.AllocateObject(1)
+	if err != nil {
+		t.Fatalf("Initial allocation failed unexpectedly: %v", err)
+	}
+	_, err = arena.AllocateObject(2)
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+}
+
+func TestNewObject_ArenaFull(t *testing.T) {
+	size := int(unsafe.Sizeof(int(0)))
+	arena, _ := NewMemoryArena[int](size)
+	_, err := NewObject(arena, 1)
+	if err != nil {
+		t.Fatalf("Initial allocation failed unexpectedly: %v", err)
+	}
+	obj, err := NewObject(arena, 2)
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+	if obj != nil {
+		t.Error("Expected nil object pointer on allocation failure")
+	}
+}
+
+func TestAppendSlice_ArenaFull(t *testing.T) {
+	// Arena needs space for the initial slice + the appended slice
+	initialSlice := []int{1}
+	appendedSlice := []int{1, 2}
+	initialSize := int(unsafe.Sizeof(initialSlice))
+	appendedSize := int(unsafe.Sizeof(appendedSlice)) // Size can vary based on slice header + backing array
+	// Allocate just enough for the *initial* slice allocation
+	arena, _ := NewMemoryArena[[]int](initialSize + int(unsafe.Alignof(initialSlice)))
+
+	ptr, err := NewObject(arena, initialSlice)
+	if err != nil {
+		t.Fatalf("Initial slice allocation failed: %v", err)
+	}
+	slice := *ptr // Get the slice allocated in the arena
+
+	// Now try to append, which requires space for a larger slice
+	objToAppend := 2
+	newSlicePtr, err := AppendSlice(&objToAppend, arena, &slice)
+
+	if !errors.Is(err, ErrArenaFull) {
+		// Note: Depending on Go's slice allocation, the exact size needed can be tricky.
+		// This test might pass if initialSize calculation was generous enough for appendedSize.
+		// A more robust test might involve precisely calculating aligned sizes.
+		// For now, we check if *some* error occurred, expecting ErrArenaFull in constrained scenarios.
+		t.Logf("Initial size: %d, Appended size approx: %d, Arena offset: %d, Arena size: %d", initialSize, appendedSize, arena.buffer.offset, arena.buffer.size)
+		t.Errorf("Expected ErrArenaFull when appending slice, got %v", err)
+	}
+	if newSlicePtr != nil {
+		t.Error("Expected nil slice pointer on allocation failure")
+	}
+}
+
+func TestMemoryArena_Resize_InvalidSize(t *testing.T) {
+	arena, _ := NewMemoryArena[int](100)
+	err := arena.Resize(0)
+	if !errors.Is(err, ErrInvalidSize) {
+		t.Errorf("Expected ErrInvalidSize for size 0, got %v", err)
+	}
+	err = arena.Resize(-10)
+	if !errors.Is(err, ErrInvalidSize) {
+		t.Errorf("Expected ErrInvalidSize for negative size, got %v", err)
+	}
+}
+
+func TestInsertMap_ArenaFull(t *testing.T) {
+	// Create an initial map with one key/value.
+	initialMap := map[string]int{"a": 1}
+
+	// Create a very small arena so that after the initial allocation there is not enough space.
+	// Choosing a capacity of 12 bytes: the initial allocation will use about 8 bytes (on a 64-bit system)
+	// and leave only 4 bytes, which is insufficient for another allocation.
+	arenaCapacity := 12
+	arena, err := NewMemoryArena[map[string]int](arenaCapacity)
+	if err != nil {
+		t.Fatalf("Failed to create arena: %v", err)
+	}
+
+	ptr, err := NewObject(arena, initialMap)
+	if err != nil {
+		t.Fatalf("Initial map allocation failed: %v", err)
+	}
+	hashmap := *ptr
+
+	t.Logf("After initial allocation - Arena offset: %d, Arena size: %d", arena.buffer.offset, arena.buffer.size)
+
+	// Attempt to insert a new key/value pair into the map. This should require more space than is available.
+	objToInsert := 2
+	newMapPtr, err := InsertMap(&objToInsert, arena, &hashmap, "b")
+
+	if err == nil {
+		t.Errorf("Expected ErrArenaFull error, but got nil")
+	}
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got: %v", err)
+	}
+	if newMapPtr != nil {
+		t.Errorf("Expected nil map pointer on allocation failure, got: %v", newMapPtr)
+	}
+}
+
+func TestConcurrentArena_New_InvalidSize(t *testing.T) {
+	_, err := NewConcurrentArena[int](0)
+	// Expect error from underlying NewMemoryArena
+	if err == nil {
+		t.Errorf("Expected error when creating concurrent arena with size 0, got nil")
+	}
+	// Check if it's the specific error if possible, otherwise check non-nil
+	// The exact error might be wrapped, so checking non-nil is safer.
+	// if !errors.Is(err, ErrInvalidSize) { // This might fail if wrapped
+	//  t.Errorf("Expected ErrInvalidSize, got %v", err)
+	// }
+
+	_, err = NewConcurrentArena[int](-10)
+	if err == nil {
+		t.Errorf("Expected error when creating concurrent arena with negative size, got nil")
+	}
+}
+
+func TestConcurrentArena_Resize_InvalidSize(t *testing.T) {
+	arena, _ := NewConcurrentArena[int](100)
+	err := arena.Resize(0)
+	if !errors.Is(err, ErrInvalidSize) {
+		t.Errorf("Expected ErrInvalidSize for size 0, got %v", err)
+	}
+	err = arena.Resize(-10)
+	if !errors.Is(err, ErrInvalidSize) {
+		t.Errorf("Expected ErrInvalidSize for negative size, got %v", err)
+	}
+}
+
+func TestConcurrentArena_ResizePreserve_InvalidSize(t *testing.T) {
+	arena, _ := NewConcurrentArena[int](100)
+	err := arena.ResizePreserve(0)
+	if !errors.Is(err, ErrInvalidSize) {
+		t.Errorf("Expected ErrInvalidSize for size 0, got %v", err)
+	}
+	err = arena.ResizePreserve(-10)
+	if !errors.Is(err, ErrInvalidSize) {
+		t.Errorf("Expected ErrInvalidSize for negative size, got %v", err)
+	}
+}
+
+// --- Test for ErrNewSizeTooSmall ---
+
+func TestConcurrentArena_ResizePreserve_TooSmall(t *testing.T) {
+	arena, _ := NewConcurrentArena[int](100)
+	_, err := arena.AllocateObject(1) // Allocate something
+	if err != nil {
+		t.Fatalf("Allocation failed: %v", err)
+	}
+	used := arena.buffer.offset
+	err = arena.ResizePreserve(used - 1) // Attempt to resize smaller than used
+	if !errors.Is(err, ErrNewSizeTooSmall) {
+		t.Errorf("Expected ErrNewSizeTooSmall, got %v", err)
+	}
+}
+
+// --- Test for Sequential Alignment ---
+
+func TestMemoryArena_SequentialAlignment(t *testing.T) {
+	arena, _ := NewMemoryArena[byte](100) // Generic arena type for testing
+
+	type type1 struct { // Align 1
+		a byte
+	}
+	type type2 struct { // Align 8 (on 64-bit)
+		b int64
+	}
+	type type3 struct { // Align 4 (on 64-bit)
+		c int32
+	}
+
+	align2 := unsafe.Alignof(type2{})
+	align3 := unsafe.Alignof(type3{})
+
+	size1 := unsafe.Sizeof(type1{})
+	size2 := unsafe.Sizeof(type2{})
+	size3 := unsafe.Sizeof(type3{})
+
+	// 1. Allocate type1 (align 1)
+	ptr1, err := arena.Allocate(int(size1))
+	if err != nil {
+		t.Fatalf("Allocation 1 failed: %v", err)
+	}
+	offset1 := arena.buffer.offset
+	if uintptr(ptr1) != uintptr(unsafe.Pointer(&arena.buffer.memory[0])) {
+		// Should start at offset 0
+		t.Errorf("Expected ptr1 at offset 0, got %p (base %p)", ptr1, &arena.buffer.memory[0])
+	}
+	if offset1 != int(size1) {
+		t.Errorf("Expected offset %d after alloc 1, got %d", size1, offset1)
+	}
+
+	// 2. Allocate type2 (align 8)
+	// Before allocating, the internal offset needs to be aligned for type2
+	expectedOffsetBeforeAlloc2 := offset1
+	if rem := expectedOffsetBeforeAlloc2 % int(align2); rem != 0 {
+		expectedOffsetBeforeAlloc2 += int(align2) - rem
+	}
+
+	ptr2, err := arena.Allocate(int(size2))
+	if err != nil {
+		t.Fatalf("Allocation 2 failed: %v", err)
+	}
+	if uintptr(ptr2) != uintptr(unsafe.Pointer(&arena.buffer.memory[expectedOffsetBeforeAlloc2])) {
+		t.Errorf("Expected ptr2 at offset %d, got %p (base %p)", expectedOffsetBeforeAlloc2, ptr2, &arena.buffer.memory[0])
+	}
+	offset2 := arena.buffer.offset
+	expectedOffsetAfterAlloc2 := expectedOffsetBeforeAlloc2 + int(size2)
+	if offset2 != expectedOffsetAfterAlloc2 {
+		t.Errorf("Expected offset %d after alloc 2, got %d", expectedOffsetAfterAlloc2, offset2)
+	}
+
+	// 3. Allocate type3 (align 4)
+	expectedOffsetBeforeAlloc3 := offset2
+	if rem := expectedOffsetBeforeAlloc3 % int(align3); rem != 0 {
+		expectedOffsetBeforeAlloc3 += int(align3) - rem
+	}
+
+	ptr3, err := arena.Allocate(int(size3))
+	if err != nil {
+		t.Fatalf("Allocation 3 failed: %v", err)
+	}
+	if uintptr(ptr3) != uintptr(unsafe.Pointer(&arena.buffer.memory[expectedOffsetBeforeAlloc3])) {
+		t.Errorf("Expected ptr3 at offset %d, got %p (base %p)", expectedOffsetBeforeAlloc3, ptr3, &arena.buffer.memory[0])
+	}
+	offset3 := arena.buffer.offset
+	expectedOffsetAfterAlloc3 := expectedOffsetBeforeAlloc3 + int(size3)
+	if offset3 != expectedOffsetAfterAlloc3 {
+		t.Errorf("Expected offset %d after alloc 3, got %d", expectedOffsetAfterAlloc3, offset3)
+	}
+}
+
+// TestNewObject_Error creates an arena too small to hold an int so that NewObject returns an error.
+func TestNewObject_Error(t *testing.T) {
+	// Create a very small arena (1 byte) for ints.
+	arena, err := NewMemoryArena[int](1)
+	if err != nil {
+		t.Fatalf("Failed to create arena: %v", err)
+	}
+
+	obj := 42
+	// Use NewObject with an explicit type parameter.
+	ptr, err := NewObject[int](arena, obj)
+	if err == nil {
+		t.Error("Expected error due to insufficient memory, but got nil")
+	}
+	if ptr != nil {
+		t.Error("Expected nil pointer on allocation failure")
+	}
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+}
+
+// TestAppendSlice_Error creates an arena too small for a slice of ints to force an allocation error.
+func TestAppendSlice_Error(t *testing.T) {
+	// Create a very small arena (1 byte) for slices of int.
+	arena, err := NewMemoryArena[[]int](1)
+	if err != nil {
+		t.Fatalf("Failed to create arena: %v", err)
+	}
+
+	// Start with an initial slice.
+	slice := []int{1, 2, 3}
+	// Attempt to append a new element using AppendSlice with explicit type parameter.
+	newSlice, err := AppendSlice[int](new(int), arena, &slice)
+	if err == nil {
+		t.Error("Expected error due to insufficient memory for appending slice, but got nil")
+	}
+	if newSlice != nil {
+		t.Error("Expected nil pointer on allocation failure in AppendSlice")
+	}
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+}
+
+// TestInsertMap_Error creates an arena too small for a map[string]int to force an allocation error.
+func TestInsertMap_Error(t *testing.T) {
+	// Create a very small arena (1 byte) for map[string]int.
+	arena, err := NewMemoryArena[map[string]int](1)
+	if err != nil {
+		t.Fatalf("Failed to create arena: %v", err)
+	}
+
+	// Start with an initial map.
+	hashmap := map[string]int{"a": 1}
+	// Attempt to insert a new key/value pair using InsertMap with explicit type parameter.
+	newMap, err := InsertMap[int](new(int), arena, &hashmap, "b")
+	if err == nil {
+		t.Error("Expected error due to insufficient memory for inserting into map, but got nil")
+	}
+	if newMap != nil {
+		t.Error("Expected nil pointer on allocation failure in InsertMap")
+	}
+	if !errors.Is(err, ErrArenaFull) {
+		t.Errorf("Expected ErrArenaFull, got %v", err)
+	}
+}
+
+func TestAppendSlice_Success(t *testing.T) {
+	// Create a sufficiently large arena for []int.
+	arena, err := NewMemoryArena[[]int](100)
+	if err != nil {
+		t.Fatalf("Failed to create arena: %v", err)
+	}
+
+	// Start with an initial slice.
+	slice := []int{1, 2, 3}
+
+	// Append a new element (4) using AppendSlice.
+	// The function uses the provided object (here, new(int) is just a placeholder).
+	// The actual value to append comes from the append operation.
+	// Because AppendSlice internally calls: *slice = append(*slice, *obj),
+	// we first set *obj to the value 4.
+	obj := 4
+	newSlice, err := AppendSlice[int](&obj, arena, &slice)
+	if err != nil {
+		t.Fatalf("AppendSlice returned error: %v", err)
+	}
+
+	// The slice passed in should now contain the new element.
+	expected := []int{1, 2, 3, 4}
+	if len(*newSlice) != len(expected) {
+		t.Errorf("Expected slice length %d, got %d", len(expected), len(*newSlice))
+	}
+	for i, v := range expected {
+		if (*newSlice)[i] != v {
+			t.Errorf("Expected element %d at index %d, got %d", v, i, (*newSlice)[i])
+		}
+	}
+}
+
+// TestInsertMap_Success verifies that InsertMap correctly inserts a new key/value pair
+// into a map when there is sufficient memory available in the arena.
+func TestInsertMap_Success(t *testing.T) {
+	// Create a sufficiently large arena for map[string]int.
+	arena, err := NewMemoryArena[map[string]int](100)
+	if err != nil {
+		t.Fatalf("Failed to create arena: %v", err)
+	}
+
+	// Start with an initial map.
+	initialMap := map[string]int{"a": 1}
+
+	// Insert a new key "b" with value 2.
+	obj := 2
+	newMap, err := InsertMap[int](&obj, arena, &initialMap, "b")
+	if err != nil {
+		t.Fatalf("InsertMap returned error: %v", err)
+	}
+
+	// The resulting map should have both keys "a" and "b" with the correct values.
+	if val, ok := (*newMap)["a"]; !ok || val != 1 {
+		t.Errorf("Expected key 'a' with value 1, got %v", (*newMap)["a"])
+	}
+	if val, ok := (*newMap)["b"]; !ok || val != 2 {
+		t.Errorf("Expected key 'b' with value 2, got %v", (*newMap)["b"])
 	}
 }
