@@ -7,7 +7,7 @@ import (
 
 type ConcurrentArena[T any] struct {
 	*MemoryArena[T]
-	mutex sync.RWMutex
+	mutex sync.Mutex // Exclusive access for all operations.
 }
 
 func NewConcurrentArena[T any](size int) (*ConcurrentArena[T], error) {
@@ -17,47 +17,41 @@ func NewConcurrentArena[T any](size int) (*ConcurrentArena[T], error) {
 	}
 	return &ConcurrentArena[T]{
 		MemoryArena: arena,
-		mutex:       sync.RWMutex{},
+		mutex:       sync.Mutex{},
 	}, nil
 }
 
-func (arena *ConcurrentArena[T]) Allocate(size int) (unsafe.Pointer, error) {
-	return arena.MemoryArena.Allocate(size)
+func (ca *ConcurrentArena[T]) Allocate(size int) (unsafe.Pointer, error) {
+	ca.mutex.Lock()
+	defer ca.mutex.Unlock()
+	return ca.MemoryArena.Allocate(size)
 }
 
-func (arena *ConcurrentArena[T]) Reset() {
-	arena.mutex.Lock()
-	defer arena.mutex.Unlock()
-	arena.MemoryArena.Reset()
-}
+func (ca *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
+	ca.mutex.Lock()
+	defer ca.mutex.Unlock()
 
-func (arena *ConcurrentArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
-	arena.mutex.Lock()
-	defer arena.mutex.Unlock()
-
-	// Ensure the object is of the expected type.
 	value, ok := obj.(T)
 	if !ok {
 		return nil, ErrInvalidType
 	}
 	size := int(unsafe.Sizeof(value))
-	ptr, err := arena.Allocate(size)
+	ptr, err := ca.MemoryArena.Allocate(size)
 	if err != nil {
 		return nil, err
 	}
-	// Directly copy the value into the allocated memory.
 	*(*T)(ptr) = value
 	return ptr, nil
 }
 
-func (arena *ConcurrentArena[T]) ResizePreserve(newSize int) error {
-	arena.mutex.Lock()
-	defer arena.mutex.Unlock()
-	return arena.MemoryArena.ResizePreserve(newSize)
+func (ca *ConcurrentArena[T]) ResizePreserve(newSize int) error {
+	ca.mutex.Lock()
+	defer ca.mutex.Unlock()
+	return ca.MemoryArena.ResizePreserve(newSize)
 }
 
-func (arena *ConcurrentArena[T]) Resize(newSize int) error {
-	arena.mutex.Lock()
-	defer arena.mutex.Unlock()
-	return arena.MemoryArena.Resize(newSize)
+func (ca *ConcurrentArena[T]) Resize(newSize int) error {
+	ca.mutex.Lock()
+	defer ca.mutex.Unlock()
+	return ca.MemoryArena.Resize(newSize)
 }

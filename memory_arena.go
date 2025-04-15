@@ -11,11 +11,22 @@ type MemoryArenaBuffer struct {
 	offset int
 }
 
-func NewMemoryArenaBuffer(size int) *MemoryArenaBuffer {
+func NewMemoryArenaBuffer(size int, alignment uintptr) *MemoryArenaBuffer {
+	// Allocate extra space to ensure you can align the base.
+	buf := make([]byte, size+int(alignment))
+
+	// Compute an aligned offset from the beginning of buf.
+	base := uintptr(unsafe.Pointer(&buf[0]))
+	offset := 0
+	if rem := base % alignment; rem != 0 {
+		offset = int(alignment - rem)
+	}
+
+	// The effective usable size is reduced by the initial offset.
 	return &MemoryArenaBuffer{
-		memory: make([]byte, size),
-		size:   size,
-		offset: 0,
+		memory: buf,
+		size:   size, // we want "size" bytes of usable space
+		offset: offset,
 	}
 }
 
@@ -27,8 +38,10 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	if size <= 0 {
 		return nil, fmt.Errorf("arena size must be greater than 0")
 	}
+	alignment := unsafe.Alignof(*new(T))
+	buffer := NewMemoryArenaBuffer(size, alignment)
 	arena := MemoryArena[T]{
-		buffer: *NewMemoryArenaBuffer(size),
+		buffer: *buffer,
 	}
 	return &arena, nil
 }
@@ -63,7 +76,8 @@ func (arena *MemoryArena[T]) GetResult() unsafe.Pointer {
 }
 
 func (arena *MemoryArena[T]) AllocateBuffer(size int) (unsafe.Pointer, error) {
-	alignment := unsafe.Alignof(new(T))
+	// Use the alignment of T itself.
+	alignment := unsafe.Alignof(*new(T))
 	arena.alignOffset(alignment)
 	if arena.notEnoughSpace(size) {
 		return nil, ErrArenaFull

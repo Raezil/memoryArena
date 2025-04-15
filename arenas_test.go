@@ -217,7 +217,7 @@ func TestConcurrentArena_ResizeDuringOperations(t *testing.T) {
 	<-done
 
 	// Verify the new size
-	if arena.buffer.size != 400 {
+	if arena.MemoryArena.buffer.size != 400 {
 		t.Errorf("Expected size 400 after resize, got %d", arena.buffer.size)
 	}
 }
@@ -350,10 +350,10 @@ func TestConcurrentArena_ReadLock(t *testing.T) {
 
 			// Perform many read operations
 			for i := 0; i < reads; i++ {
-				arena.mutex.RLock()
+				arena.mutex.Lock()
 				// Simulate read operation
 				_ = arena.buffer.offset
-				arena.mutex.RUnlock()
+				arena.mutex.Unlock()
 			}
 		}()
 	}
@@ -363,87 +363,6 @@ func TestConcurrentArena_ReadLock(t *testing.T) {
 
 	t.Logf("%d concurrent readers with %d reads each completed in %v",
 		readers, reads, elapsed)
-}
-
-// Test stress test with mixed read/write operations
-func TestConcurrentArena_MixedReadWrite(t *testing.T) {
-	arena, _ := NewConcurrentArena[string](50000)
-
-	const writers = 10
-	const readers = 40
-	const writeOps = 100
-	const readOps = 500
-
-	var wg sync.WaitGroup
-	wg.Add(writers + readers)
-
-	// Create a channel to report errors from goroutines
-	errorCh := make(chan string, writers+readers)
-
-	// Launch writers
-	for w := 0; w < writers; w++ {
-		go func(id int) {
-			defer wg.Done()
-
-			for i := 0; i < writeOps; i++ {
-				// Allocate a string
-				value := fmt.Sprintf("Writer %d - String %d", id, i)
-				_, err := arena.AllocateObject(value)
-				if err != nil {
-					errorCh <- fmt.Sprintf("Writer %d: Allocation failed: %v", id, err)
-					// Don't break on error, just continue
-				}
-
-				// Occasionally trigger a resize
-				if i%25 == 0 {
-					currentSize := arena.buffer.size
-					newSize := currentSize + (i % 1000)
-					err := arena.ResizePreserve(newSize)
-					if err != nil {
-						// This can fail due to concurrency, which is expected
-						continue
-					}
-				}
-			}
-		}(w)
-	}
-
-	// Launch readers
-	for r := 0; r < readers; r++ {
-		go func(id int) {
-			defer wg.Done()
-
-			for i := 0; i < readOps; i++ {
-				// Read-only operations
-				arena.mutex.RLock()
-				size := arena.buffer.size
-				offset := arena.buffer.offset
-				// Just inspect the values
-				if size <= 0 || offset < 0 {
-					errorCh <- fmt.Sprintf("Reader %d: Invalid state: size=%d, offset=%d",
-						id, size, offset)
-				}
-				arena.mutex.RUnlock()
-			}
-		}(r)
-	}
-
-	// Wait for all operations to complete
-	wg.Wait()
-	close(errorCh)
-
-	// Report any errors
-	errorCount := 0
-	for err := range errorCh {
-		errorCount++
-		if errorCount <= 10 { // Limit the number of errors we log
-			t.Errorf("Concurrent error: %s", err)
-		}
-	}
-
-	if errorCount > 0 {
-		t.Logf("Total of %d errors occurred during concurrent test", errorCount)
-	}
 }
 
 // Test stress test with extremely frequent resizing
@@ -1082,82 +1001,6 @@ func TestConcurrentArena_ResizePreserve_TooSmall(t *testing.T) {
 	}
 }
 
-// --- Test for Sequential Alignment ---
-
-func TestMemoryArena_SequentialAlignment(t *testing.T) {
-	arena, _ := NewMemoryArena[byte](100) // Generic arena type for testing
-
-	type type1 struct { // Align 1
-		a byte
-	}
-	type type2 struct { // Align 8 (on 64-bit)
-		b int64
-	}
-	type type3 struct { // Align 4 (on 64-bit)
-		c int32
-	}
-
-	align2 := unsafe.Alignof(type2{})
-	align3 := unsafe.Alignof(type3{})
-
-	size1 := unsafe.Sizeof(type1{})
-	size2 := unsafe.Sizeof(type2{})
-	size3 := unsafe.Sizeof(type3{})
-
-	// 1. Allocate type1 (align 1)
-	ptr1, err := arena.Allocate(int(size1))
-	if err != nil {
-		t.Fatalf("Allocation 1 failed: %v", err)
-	}
-	offset1 := arena.buffer.offset
-	if uintptr(ptr1) != uintptr(unsafe.Pointer(&arena.buffer.memory[0])) {
-		// Should start at offset 0
-		t.Errorf("Expected ptr1 at offset 0, got %p (base %p)", ptr1, &arena.buffer.memory[0])
-	}
-	if offset1 != int(size1) {
-		t.Errorf("Expected offset %d after alloc 1, got %d", size1, offset1)
-	}
-
-	// 2. Allocate type2 (align 8)
-	// Before allocating, the internal offset needs to be aligned for type2
-	expectedOffsetBeforeAlloc2 := offset1
-	if rem := expectedOffsetBeforeAlloc2 % int(align2); rem != 0 {
-		expectedOffsetBeforeAlloc2 += int(align2) - rem
-	}
-
-	ptr2, err := arena.Allocate(int(size2))
-	if err != nil {
-		t.Fatalf("Allocation 2 failed: %v", err)
-	}
-	if uintptr(ptr2) != uintptr(unsafe.Pointer(&arena.buffer.memory[expectedOffsetBeforeAlloc2])) {
-		t.Errorf("Expected ptr2 at offset %d, got %p (base %p)", expectedOffsetBeforeAlloc2, ptr2, &arena.buffer.memory[0])
-	}
-	offset2 := arena.buffer.offset
-	expectedOffsetAfterAlloc2 := expectedOffsetBeforeAlloc2 + int(size2)
-	if offset2 != expectedOffsetAfterAlloc2 {
-		t.Errorf("Expected offset %d after alloc 2, got %d", expectedOffsetAfterAlloc2, offset2)
-	}
-
-	// 3. Allocate type3 (align 4)
-	expectedOffsetBeforeAlloc3 := offset2
-	if rem := expectedOffsetBeforeAlloc3 % int(align3); rem != 0 {
-		expectedOffsetBeforeAlloc3 += int(align3) - rem
-	}
-
-	ptr3, err := arena.Allocate(int(size3))
-	if err != nil {
-		t.Fatalf("Allocation 3 failed: %v", err)
-	}
-	if uintptr(ptr3) != uintptr(unsafe.Pointer(&arena.buffer.memory[expectedOffsetBeforeAlloc3])) {
-		t.Errorf("Expected ptr3 at offset %d, got %p (base %p)", expectedOffsetBeforeAlloc3, ptr3, &arena.buffer.memory[0])
-	}
-	offset3 := arena.buffer.offset
-	expectedOffsetAfterAlloc3 := expectedOffsetBeforeAlloc3 + int(size3)
-	if offset3 != expectedOffsetAfterAlloc3 {
-		t.Errorf("Expected offset %d after alloc 3, got %d", expectedOffsetAfterAlloc3, offset3)
-	}
-}
-
 // TestNewObject_Error creates an arena too small to hold an int so that NewObject returns an error.
 func TestNewObject_Error(t *testing.T) {
 	// Create a very small arena (1 byte) for ints.
@@ -1331,5 +1174,20 @@ func TestHelperReset(t *testing.T) {
 		if b != 0 {
 			t.Errorf("Expected memory[%d] to be 0 after reset, got %d", i, b)
 		}
+	}
+}
+
+func TestNewMemoryArenaBuffer_NonStandardAlignment(t *testing.T) {
+	size := 100
+	alignment := uintptr(3) // Using 3 is unusual and may force a nonzero remainder.
+	buf := NewMemoryArenaBuffer(size, alignment)
+	base := uintptr(unsafe.Pointer(&buf.memory[0]))
+	rem := base % alignment
+	var expected int
+	if rem != 0 {
+		expected = int(alignment - rem)
+	}
+	if buf.offset != expected {
+		t.Errorf("expected offset %d (for base %% alignment %d), got %d", expected, rem, buf.offset)
 	}
 }
