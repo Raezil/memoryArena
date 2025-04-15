@@ -1286,3 +1286,50 @@ func TestInsertMap_Success(t *testing.T) {
 		t.Errorf("Expected key 'b' with value 2, got %v", (*newMap)["b"])
 	}
 }
+
+func TestHelperReset(t *testing.T) {
+	// Create a memory arena with a capacity of 100 bytes.
+	arena, err := NewMemoryArena[int](100)
+	if err != nil {
+		t.Fatalf("Failed to create memory arena: %v", err)
+	}
+
+	// Allocate 8 bytes (e.g. for an int) to simulate arena usage.
+	_, err = arena.Allocate(8)
+	if err != nil {
+		t.Fatalf("Allocation failed: %v", err)
+	}
+
+	// Write nonzero values in the allocated region.
+	startIndex := arena.buffer.offset - 8
+	for i := 0; i < 8; i++ {
+		arena.buffer.memory[startIndex+i] = 42 // example nonzero value
+	}
+
+	// Verify that the allocated block contains nonzero values.
+	foundNonZero := false
+	for i := startIndex; i < arena.buffer.offset; i++ {
+		if arena.buffer.memory[i] != 0 {
+			foundNonZero = true
+			break
+		}
+	}
+	if !foundNonZero {
+		t.Error("Expected allocated memory to have nonzero values before reset")
+	}
+
+	// Use the helper Reset function which accepts an Arena interface.
+	Reset(arena)
+
+	// Verify that the offset is reset to 0.
+	if arena.buffer.offset != 0 {
+		t.Errorf("Expected offset to be 0 after reset, got %d", arena.buffer.offset)
+	}
+
+	// Verify that all bytes in the arena's memory are now zeroed.
+	for i, b := range arena.buffer.memory {
+		if b != 0 {
+			t.Errorf("Expected memory[%d] to be 0 after reset, got %d", i, b)
+		}
+	}
+}
