@@ -1191,3 +1191,83 @@ func TestNewMemoryArenaBuffer_NonStandardAlignment(t *testing.T) {
 		t.Errorf("expected offset %d (for base %% alignment %d), got %d", expected, rem, buf.offset)
 	}
 }
+
+func TestConcurrentArena_MixedReadWrite(t *testing.T) {
+	arena, _ := NewConcurrentArena[string](50000)
+	const writers = 10
+	const readers = 40
+	const writeOps = 100
+	const readOps = 500
+
+	var wg sync.WaitGroup
+	wg.Add(writers + readers)
+
+	// Create a channel to report errors from goroutines
+	errorCh := make(chan string, writers+readers)
+
+	// Launch writers
+	for w := 0; w < writers; w++ {
+		go func(id int) {
+			defer wg.Done()
+
+			for i := 0; i < writeOps; i++ {
+				// Allocate a string
+				value := fmt.Sprintf("Writer %d - String %d", id, i)
+				_, err := arena.AllocateObject(value)
+				if err != nil {
+					errorCh <- fmt.Sprintf("Writer %d: Allocation failed: %v", id, err)
+					// Don't break on error, just continue
+				}
+
+				// Occasionally trigger a resize
+				if i%25 == 0 {
+					// Lock the mutex before reading shared state
+					arena.mutex.Lock()
+					currentSize := arena.buffer.size
+					arena.mutex.Unlock()
+
+					newSize := currentSize + (i % 1000)
+					if err := arena.ResizePreserve(newSize); err != nil {
+						// This can fail due to concurrency, which is expected
+						continue
+					}
+				}
+			}
+		}(w)
+	}
+
+	// Launch readers
+	for r := 0; r < readers; r++ {
+		go func(id int) {
+			defer wg.Done()
+
+			for i := 0; i < readOps; i++ {
+				// Read-only operations are already guarded with RLock
+				arena.mutex.Lock()
+				size := arena.buffer.size
+				offset := arena.buffer.offset
+				if size <= 0 || offset < 0 {
+					errorCh <- fmt.Sprintf("Reader %d: Invalid state: size=%d, offset=%d", id, size, offset)
+				}
+				arena.mutex.Unlock()
+			}
+		}(r)
+	}
+
+	// Wait for all operations to complete
+	wg.Wait()
+	close(errorCh)
+
+	// Report any errors
+	errorCount := 0
+	for err := range errorCh {
+		errorCount++
+		if errorCount <= 10 { // Limit the number of errors we log
+			t.Errorf("Concurrent error: %s", err)
+		}
+	}
+
+	if errorCount > 0 {
+		t.Logf("Total of %d errors occurred during concurrent test", errorCount)
+	}
+}
