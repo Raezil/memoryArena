@@ -8,7 +8,7 @@ github.com/Raezil/memoryArena/concurrent_arena.go:24:	Allocate		100.0%
 github.com/Raezil/memoryArena/concurrent_arena.go:30:	AllocateObject		100.0%
 github.com/Raezil/memoryArena/concurrent_arena.go:47:	ResizePreserve		100.0%
 github.com/Raezil/memoryArena/concurrent_arena.go:53:	Resize			100.0%
-github.com/Raezil/memoryArena/memory_arena.go:14:	NewMemoryArenaBuffer	83.3%
+github.com/Raezil/memoryArena/memory_arena.go:14:	NewMemoryArenaBuffer	100.0%
 github.com/Raezil/memoryArena/memory_arena.go:37:	NewMemoryArena		100.0%
 github.com/Raezil/memoryArena/memory_arena.go:49:	GetRemainder		100.0%
 github.com/Raezil/memoryArena/memory_arena.go:53:	alignOffset		100.0%
@@ -24,4 +24,4 @@ github.com/Raezil/memoryArena/memory_arena.go:112:	AllocateObject		100.0%
 github.com/Raezil/memoryArena/memory_arena.go:125:	Resize			100.0%
 github.com/Raezil/memoryArena/memory_arena.go:136:	ResizePreserve		100.0%
 github.com/Raezil/memoryArena/memory_arena.go:148:	SetNewMemory		100.0%
-total:							(statements)		99.0%
+total:							(statements)		100.0%
