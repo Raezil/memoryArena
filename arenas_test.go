@@ -1271,3 +1271,31 @@ func TestConcurrentArena_MixedReadWrite(t *testing.T) {
 		t.Logf("Total of %d errors occurred during concurrent test", errorCount)
 	}
 }
+
+func TestNewMemoryArena_InvalidSize(t *testing.T) {
+	_, err := NewMemoryArena[int](-1)
+	if err == nil {
+		t.Errorf("Expected error for size 0")
+	}
+}
+
+func TestMemoryArena_OverAllocate(t *testing.T) {
+	arena, _ := NewMemoryArena[int](999)
+	_, err := arena.Allocate(1000)
+	if err == nil {
+		t.Errorf("Expected error for over allocation")
+	}
+}
+
+func TestConcurrentArena_Parallel(t *testing.T) {
+	arena, _ := NewConcurrentArena[int](1000)
+	var wg sync.WaitGroup
+	for i := 0; i < 10; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, _ = arena.Allocate(10)
+		}()
+	}
+	wg.Wait()
+}
