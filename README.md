@@ -53,11 +53,18 @@ func main() {
 
 }
 ```
-Testing
+## Testing & Benchmarks
 
-To run the tests, execute:
+Run all tests with race detection:
+
+```bash
+go test -v -race ./...
 ```
-go test
+
+Run benchmarks:
+
+```bash
+go test -bench=. -benchmem
 ```
 
 
