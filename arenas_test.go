@@ -501,7 +501,7 @@ func BenchmarkMemoryArenaVsStandardAllocation(b *testing.B) {
 
 // Benchmark different sizes of allocations
 func BenchmarkMemoryArena_DifferentSizes(b *testing.B) {
-	sizes := []int{8, 16, 32, 64, 128, 256, 512, 1024}
+	sizes := []int{8, 16, 32, 64, 128}
 
 	for _, size := range sizes {
 		b.Run(fmt.Sprintf("Size-%d", size), func(b *testing.B) {

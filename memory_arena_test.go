@@ -189,110 +189,6 @@ func TestMemoryArena_AllocateObject(t *testing.T) {
 	}
 }
 
-func BenchmarkMemoryArena_AllocateObject(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	obj := 5
-	for i := 0; i < b.N; i++ {
-		_, err = arena.AllocateObject(obj)
-		if err != nil {
-			b.Errorf("Error: %v", err)
-		}
-	}
-}
-
-func BenchmarkMemoryArena_AllocateNewValue(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	obj := 5
-	for i := 0; i < b.N; i++ {
-		_, err = arena.AllocateNewValue(10, obj)
-		if err != nil {
-			b.Errorf("Error: %v", err)
-		}
-	}
-}
-
-func BenchmarkMemoryArena_AllocateBuffer(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	for i := 0; i < b.N; i++ {
-		_, err = arena.AllocateBuffer(10)
-		if err != nil {
-			b.Errorf("Error: %v", err)
-		}
-	}
-}
-
-func BenchmarkMemoryArena_Allocate(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	for i := 0; i < b.N; i++ {
-		_, err = arena.Allocate(10)
-		if err != nil {
-			b.Errorf("Error: %v", err)
-		}
-	}
-}
-
-func BenchmarkMemoryArena_Reset(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	for i := 0; i < b.N; i++ {
-		arena.Reset()
-	}
-}
-
-func BenchmarkMemoryArena_Free(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	for i := 0; i < b.N; i++ {
-		arena.Free()
-	}
-}
-
-func BenchmarkMemoryArena_GetResult(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	for i := 0; i < b.N; i++ {
-		arena.GetResult()
-	}
-}
-
-func BenchmarkMemoryArena_ResizePreserve(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	for i := 0; i < b.N; i++ {
-		arena.ResizePreserve(200)
-	}
-}
-
-func BenchmarkMemoryArena_Resize(b *testing.B) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		b.Errorf("Error: %v", err)
-	}
-	for i := 0; i < b.N; i++ {
-		arena.Resize(200)
-	}
-}
-
 // TestMemoryArenaBuffer_AlignmentCheck verifies that the effective base of the arena buffer is aligned.
 func TestMemoryArenaBuffer_AlignmentCheck(t *testing.T) {
 	// Test for a couple of alignment values.
@@ -432,5 +328,162 @@ func TestNewMemoryArenaBuffer_AlternateAlignment(t *testing.T) {
 	effective := base + uintptr(buf.offset)
 	if effective%alignment != 0 {
 		t.Errorf("effective pointer %#x is not aligned to %d bytes", effective, alignment)
+	}
+}
+
+const benchmarkArenaSize = 1 << 20 // 1 MB - adjust as needed
+
+func BenchmarkMemoryArena_AllocateObject(b *testing.B) {
+	arena, err := NewMemoryArena[int](benchmarkArenaSize) // Increased size
+	if err != nil {
+		b.Fatalf("Error creating arena: %v", err) // Use Fatalf for setup errors
+	}
+	obj := 5
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		arena.Reset() // Reset for each allocation benchmark iteration
+		_, err = arena.AllocateObject(obj)
+		if err != nil {
+			b.Fatalf("Iteration %d: AllocateObject failed: %v", i, err) // Use Fatalf
+		}
+	}
+}
+
+func BenchmarkMemoryArena_AllocateNewValue(b *testing.B) {
+	arena, err := NewMemoryArena[int](benchmarkArenaSize) // Increased size
+	if err != nil {
+		b.Fatalf("Error creating arena: %v", err)
+	}
+	obj := 5
+	size := int(unsafe.Sizeof(obj))
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		arena.Reset() // Reset for each allocation benchmark iteration
+		_, err = arena.AllocateNewValue(size, obj)
+		if err != nil {
+			b.Fatalf("Iteration %d: AllocateNewValue failed: %v", i, err) // Use Fatalf
+		}
+	}
+}
+
+func BenchmarkMemoryArena_AllocateBuffer(b *testing.B) {
+	arena, err := NewMemoryArena[int](benchmarkArenaSize) // Increased size
+	if err != nil {
+		b.Fatalf("Error creating arena: %v", err)
+	}
+	allocSize := 10
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		arena.Reset() // Reset for each allocation benchmark iteration
+		_, err = arena.AllocateBuffer(allocSize)
+		if err != nil {
+			b.Fatalf("Iteration %d: AllocateBuffer failed: %v", i, err) // Use Fatalf
+		}
+	}
+}
+
+func BenchmarkMemoryArena_Allocate(b *testing.B) {
+	arena, err := NewMemoryArena[int](benchmarkArenaSize) // Increased size
+	if err != nil {
+		b.Fatalf("Error creating arena: %v", err)
+	}
+	allocSize := 10
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		arena.Reset() // Reset for each allocation benchmark iteration
+		_, err = arena.Allocate(allocSize)
+		if err != nil {
+			b.Fatalf("Iteration %d: Allocate failed: %v", i, err) // Use Fatalf
+		}
+	}
+}
+
+func BenchmarkMemoryArena_Reset(b *testing.B) {
+	// Benchmarking Reset itself doesn't require a huge arena unless setup involves filling it.
+	arena, err := NewMemoryArena[int](1024) // Moderate size is likely fine
+	if err != nil {
+		b.Fatalf("Error creating arena: %v", err)
+	}
+	// Optional: Allocate some data before timing if you want Reset to clear something
+	// _, _ = arena.Allocate(512)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		arena.Reset() // This is the operation being benchmarked
+	}
+}
+
+func BenchmarkMemoryArena_Free(b *testing.B) {
+	// Benchmarking Free itself
+	arena, err := NewMemoryArena[int](1024) // Moderate size
+	if err != nil {
+		b.Fatalf("Error creating arena: %v", err)
+	}
+	// Optional: Allocate some data before timing if you want Free to clear something
+	// _, _ = arena.Allocate(512)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		arena.Free() // This is the operation being benchmarked
+	}
+}
+
+func BenchmarkMemoryArena_GetResult(b *testing.B) {
+	arena, err := NewMemoryArena[int](1024) // Moderate size
+	if err != nil {
+		b.Fatalf("Error creating arena: %v", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = arena.GetResult() // This is the operation being benchmarked
+	}
+}
+
+// Note: Benchmarking Resize/ResizePreserve without allocations might not be very informative.
+// A more realistic benchmark might allocate data, then resize.
+// Keeping the original structure for now.
+
+func BenchmarkMemoryArena_ResizePreserve(b *testing.B) {
+	// Initial size should be large enough if allocations happen before resize.
+	initialSize := 1024
+	resizeTo := 2048
+	arena, err := NewMemoryArena[int](initialSize)
+	if err != nil {
+		b.Fatalf("Error creating arena: %v", err)
+	}
+	// Optional: Allocate some data here before timing
+	// _, _ = arena.Allocate(initialSize / 2)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		// Reset state if needed for consistent resize benchmark
+		// arena.Reset()
+		// arena.Allocate(initialSize / 2) // Re-allocate if testing resize with data
+		err = arena.ResizePreserve(resizeTo)
+		// Reset back to initial size for next iteration if needed?
+		// Or just keep resizing? Depends on what's being measured.
+		// If just the call:
+		if err != nil {
+			b.Fatalf("ResizePreserve failed: %v", err) // Use Fatalf
+		}
+		// If testing repeated resize on same (growing) arena, might need larger initial/target sizes
+		// Or reset the arena size back if possible/meaningful
+		arena.Resize(initialSize) // Reset size for next iteration consistency (if desired)
+
+	}
+}
+
+func BenchmarkMemoryArena_Resize(b *testing.B) {
+	initialSize := 1024
+	resizeTo := 2048
+	arena, err := NewMemoryArena[int](initialSize)
+	if err != nil {
+		b.Fatalf("Error creating arena: %v", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		err = arena.Resize(resizeTo)
+		if err != nil {
+			b.Fatalf("Resize failed: %v", err) // Use Fatalf
+		}
+		// Reset size for next iteration consistency (if desired)
+		arena.Resize(initialSize)
 	}
 }
