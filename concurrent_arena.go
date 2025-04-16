@@ -55,3 +55,17 @@ func (ca *ConcurrentArena[T]) Resize(newSize int) error {
 	defer ca.mutex.Unlock()
 	return ca.MemoryArena.Resize(newSize)
 }
+
+// Reset clears the arena’s memory and resets its offset, under lock.
+func (ca *ConcurrentArena[T]) Reset() {
+	ca.mutex.Lock()
+	defer ca.mutex.Unlock()
+	ca.MemoryArena.Reset()
+}
+
+// Free zeroes out the arena’s buffer, under lock.
+func (ca *ConcurrentArena[T]) Free() {
+	ca.mutex.Lock()
+	defer ca.mutex.Unlock()
+	ca.MemoryArena.Free()
+}
