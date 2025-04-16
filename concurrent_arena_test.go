@@ -1,6 +1,7 @@
 package memoryArena
 
 import (
+	"sync"
 	"testing"
 	"unsafe"
 )
@@ -205,5 +206,69 @@ func BenchmarkConcurrentArena_Reset(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		arena.Reset() // Benchmarking Reset operation
+	}
+}
+
+// Test that ConcurrentArena Reset clears memory when called concurrently.
+func TestConcurrentArena_Reset_ConcurrentMemory(t *testing.T) {
+	arena, err := NewConcurrentArena[int](160)
+	if err != nil {
+		t.Fatalf("Failed to create concurrent arena: %v", err)
+	}
+	// Allocate and initialize memory
+	for i := 0; i < 20; i++ {
+		_, err := arena.AllocateObject(i)
+		if err != nil {
+			t.Fatalf("Allocation failed at iteration %d: %v", i, err)
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(5)
+	for i := 0; i < 5; i++ {
+		go func() {
+			arena.Reset()
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	// After reset, memory should be zeroed
+	for idx, val := range arena.buffer.memory {
+		if val != 0 {
+			t.Errorf("Error: memory not cleared at index %d, got %v", idx, val)
+		}
+	}
+}
+
+// Test that ConcurrentArena Free works correctly when called concurrently.
+func TestConcurrentArena_Free_Concurrent(t *testing.T) {
+	arena, err := NewConcurrentArena[int](1000)
+	if err != nil {
+		t.Fatalf("Failed to create concurrent arena: %v", err)
+	}
+	// Allocate and initialize memory
+	for i := 0; i < 50; i++ {
+		_, err := arena.AllocateObject(i)
+		if err != nil {
+			t.Fatalf("Allocation failed at iteration %d: %v", i, err)
+		}
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(10)
+	for i := 0; i < 10; i++ {
+		go func() {
+			arena.Free()
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+
+	// After free, memory should be zeroed
+	for idx, val := range arena.buffer.memory {
+		if val != 0 {
+			t.Errorf("Error: memory not freed at index %d, got %v", idx, val)
+		}
 	}
 }
