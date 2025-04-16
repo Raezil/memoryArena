@@ -487,3 +487,48 @@ func BenchmarkMemoryArena_Resize(b *testing.B) {
 		arena.Resize(initialSize)
 	}
 }
+
+// Test that the underlying memory slice is large enough to hold size+offset.
+func TestNewMemoryArenaBuffer_MemoryLength(t *testing.T) {
+	size := 128
+	alignment := uintptr(32)
+	buf := NewMemoryArenaBuffer(size, alignment)
+
+	// buffer.memory must be at least size + offset so that memory[offset:offset+size] is valid
+	if len(buf.memory) < buf.offset+size {
+		t.Errorf("memory length %d too small; want >= offset(%d) + size(%d)", len(buf.memory), buf.offset, size)
+	}
+
+	// offset must be in the range [0, alignment)
+	if buf.offset < 0 || uintptr(buf.offset) >= alignment {
+		t.Errorf("offset %d out of valid range [0,%d)", buf.offset, alignment)
+	}
+}
+
+// Test that the buffer is zero‑initialized.
+func TestNewMemoryArenaBuffer_ZeroInitialization(t *testing.T) {
+	buf := NewMemoryArenaBuffer(50, 8)
+	for i, b := range buf.memory {
+		if b != 0 {
+			t.Errorf("memory at index %d = %d; want 0", i, b)
+		}
+	}
+}
+
+// Test that writes and reads at the effective base are in‑bounds.
+func TestNewMemoryArenaBuffer_WriteRead(t *testing.T) {
+	size := 16
+	buf := NewMemoryArenaBuffer(size, 8)
+
+	// write a pattern into the "usable" region
+	base := buf.offset
+	for i := 0; i < size; i++ {
+		buf.memory[base+i] = byte(i + 1)
+	}
+	// read it back
+	for i := 0; i < size; i++ {
+		if got := buf.memory[base+i]; got != byte(i+1) {
+			t.Errorf("buf.memory[%d] = %d; want %d", base+i, got, byte(i+1))
+		}
+	}
+}
