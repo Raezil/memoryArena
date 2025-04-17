@@ -272,3 +272,125 @@ func TestConcurrentArena_Free_Concurrent(t *testing.T) {
 		}
 	}
 }
+
+// --- New concurrent tests ---
+
+// Test concurrent allocations to ensure thread-safe Allocate implementation.
+func TestConcurrentArena_Allocate_Concurrent(t *testing.T) {
+	arena, err := NewConcurrentArena[int](1000)
+	if err != nil {
+		t.Fatalf("Failed to create concurrent arena: %v", err)
+	}
+	var wg sync.WaitGroup
+	const count = 100
+	results := make([]unsafe.Pointer, count)
+	wg.Add(count)
+	for i := 0; i < count; i++ {
+		i := i
+		go func() {
+			ptr, err := arena.Allocate(1)
+			if err != nil {
+				t.Errorf("Concurrent Allocate failed: %v", err)
+			}
+			results[i] = ptr
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	// Check non-nil and uniqueness
+	seen := make(map[uintptr]bool)
+	for i, ptr := range results {
+		if ptr == nil {
+			t.Errorf("ptr[%d] is nil", i)
+		}
+		addr := uintptr(ptr)
+		if seen[addr] {
+			t.Errorf("Duplicate pointer at iteration %d: %v", i, ptr)
+		}
+		seen[addr] = true
+	}
+}
+
+// Test concurrent object allocations to ensure AllocateObject is thread-safe and preserves values.
+func TestConcurrentArena_AllocateObject_Concurrent(t *testing.T) {
+	arena, err := NewConcurrentArena[int](1000)
+	if err != nil {
+		t.Fatalf("Failed to create concurrent arena: %v", err)
+	}
+	values := []int{10, 20, 30, 40, 50}
+	var wg sync.WaitGroup
+	count := len(values)
+	results := make([]int, count)
+	wg.Add(count)
+	for idx, v := range values {
+		idx, v := idx, v
+		go func() {
+			ptr, err := arena.AllocateObject(v)
+			if err != nil {
+				t.Errorf("Concurrent AllocateObject failed: %v", err)
+			}
+			results[idx] = *(*int)(ptr)
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	for i, v := range values {
+		if results[i] != v {
+			t.Errorf("Value mismatch at index %d: expected %d, got %d", i, v, results[i])
+		}
+	}
+}
+
+// Test concurrent resize operations to ensure thread-safe Resize implementation.
+func TestConcurrentArena_Resize_Concurrent(t *testing.T) {
+	arena, err := NewConcurrentArena[int](10)
+	if err != nil {
+		t.Fatalf("Failed to create concurrent arena: %v", err)
+	}
+	var wg sync.WaitGroup
+	wg.Add(5)
+	for i := 0; i < 5; i++ {
+		go func() {
+			if err := arena.Resize(20); err != nil {
+				t.Errorf("Concurrent Resize failed: %v", err)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	if len(arena.buffer.memory) != 20 {
+		t.Errorf("Expected capacity 20 after concurrent Resize, got %d", len(arena.buffer.memory))
+	}
+}
+
+// Test concurrent preserve-resize operations to ensure thread-safe ResizePreserve and data integrity.
+func TestConcurrentArena_ResizePreserve_Concurrent(t *testing.T) {
+	arena, err := NewConcurrentArena[int](10)
+	if err != nil {
+		t.Fatalf("Failed to create concurrent arena: %v", err)
+	}
+	// Allocate a value to preserve
+	ptrInit, err := arena.AllocateObject(99)
+	if err != nil {
+		t.Fatalf("Initial allocation failed: %v", err)
+	}
+	var wg sync.WaitGroup
+	wg.Add(5)
+	for i := 0; i < 5; i++ {
+		go func() {
+			if err := arena.ResizePreserve(20); err != nil {
+				t.Errorf("Concurrent ResizePreserve failed: %v", err)
+			}
+			wg.Done()
+		}()
+	}
+	wg.Wait()
+	if len(arena.buffer.memory) != 20 {
+		t.Errorf("Expected capacity 20 after concurrent ResizePreserve, got %d", len(arena.buffer.memory))
+	}
+	// Check preserved initial value
+	val := *(*int)(ptrInit)
+	if val != 99 {
+		t.Errorf("Expected preserved value 99 after ResizePreserve, got %d", val)
+	}
+}

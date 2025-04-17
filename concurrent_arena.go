@@ -60,6 +60,9 @@ func (ca *ConcurrentArena[T]) Resize(newSize int) error {
 func (ca *ConcurrentArena[T]) Reset() {
 	ca.mutex.Lock()
 	defer ca.mutex.Unlock()
+	// First free memory to zero out the buffer
+	ca.MemoryArena.Free()
+	// Then reset offset to initial state
 	ca.MemoryArena.Reset()
 }
 
