@@ -138,3 +138,91 @@ func TestAllocateNewValue_ErrArenaFull(t *testing.T) {
 		t.Fatalf("expected ErrArenaFull, got %v", err)
 	}
 }
+
+// Test basic allocation and value storage
+func TestAllocateNewValueAndAllocateObject(t *testing.T) {
+	arena, err := NewAtomicArena[int](1024)
+	if err != nil {
+		t.Fatalf("failed to create arena: %v", err)
+	}
+
+	// Test AllocateNewValue
+	ptr, err := arena.AllocateNewValue(42)
+	if err != nil {
+		t.Fatalf("AllocateNewValue failed: %v", err)
+	}
+	val := *(*int)(ptr)
+	if val != 42 {
+		t.Errorf("expected value 42, got %d", val)
+	}
+
+	// Test AllocateObject with correct type initializes to provided value
+	raw, err := arena.AllocateObject(100)
+	if err != nil {
+		t.Fatalf("AllocateObject failed: %v", err)
+	}
+	if *(*int)(raw) != 100 {
+		t.Errorf("expected initialized int 100, got %d", *(*int)(raw))
+	}
+	// Populate and verify overwrite
+	*(*int)(raw) = 99
+	if *(*int)(raw) != 99 {
+		t.Errorf("expected stored value 99, got %d", *(*int)(raw))
+	}
+
+	// Test type mismatch
+	if _, err := arena.AllocateObject("string"); err == nil {
+		t.Error("expected error on type mismatch in AllocateObject, got nil")
+	}
+}
+
+// Test Reset zeroes memory and resets offset
+func TestAtomicReset(t *testing.T) {
+	arena, err := NewAtomicArena[int](64)
+	if err != nil {
+		t.Fatalf("failed to create arena: %v", err)
+	}
+	// allocate two values
+	ptr1, _ := arena.AllocateNewValue(7)
+	ptr2, _ := arena.AllocateNewValue(8)
+	// modify
+	*(*int)(ptr1) = 13
+	*(*int)(ptr2) = 17
+
+	arena.Reset()
+	// after reset, next allocation with provided value 0 should initialize to 0
+	newPtr, err := arena.AllocateObject(0)
+	if err != nil {
+		t.Fatalf("AllocateObject after Reset failed: %v", err)
+	}
+	if *(*int)(newPtr) != 0 {
+		t.Errorf("expected zero from fresh allocation after reset, got %d", *(*int)(newPtr))
+	}
+}
+
+// Test concurrent allocations for thread-safety
+func TestConcurrentAllocations(t *testing.T) {
+	arena, err := NewAtomicArena[uint64](1024 * 10)
+	if err != nil {
+		t.Fatalf("failed to create arena: %v", err)
+	}
+	var wg sync.WaitGroup
+	count := 1000
+
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(val uint64) {
+			defer wg.Done()
+			ptr, err := arena.AllocateNewValue(val)
+			if err != nil {
+				t.Errorf("AllocateNewValue error in goroutine: %v", err)
+				return
+			}
+			retrieved := *(*uint64)(ptr)
+			if retrieved != val {
+				t.Errorf("mismatched value: expected %d, got %d", val, retrieved)
+			}
+		}(uint64(i))
+	}
+	wg.Wait()
+}

@@ -1,20 +1,22 @@
 package memoryArena
 
 import (
+	"fmt"
 	"sync/atomic"
 	"unsafe"
 )
 
 // -------------------------------------------------------------
-// AtomicMemoryArena provides lock-free, thread-safe bump allocation
+// AtomicArena provides lock-free, thread-safe bump allocation
 // using the existing MemoryArenaBuffer.
+// -------------------------------------------------------------
 type AtomicArena[T any] struct {
 	buffer    *MemoryArenaBuffer
 	alignment uintptr
 	offset    atomic.Uintptr
 }
 
-// NewAtomicMemoryArena creates a new AtomicMemoryArena with the specified capacity.
+// NewAtomicArena creates a new AtomicArena with the specified capacity.
 // Returns ErrInvalidSize if size <= 0.
 func NewAtomicArena[T any](size int) (*AtomicArena[T], error) {
 	if size <= 0 {
@@ -68,6 +70,18 @@ func (arena *AtomicArena[T]) AllocateNewValue(obj T) (unsafe.Pointer, error) {
 	}
 	*(*T)(ptr) = obj
 	return ptr, nil
+}
+
+// AllocateObject allocates and initializes the provided obj (of expected type T) in the arena.
+// Returns a raw unsafe.Pointer to the stored value.
+func (arena *AtomicArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
+	// ensure the object matches the arena's type
+	typedObj, ok := obj.(T)
+	if !ok {
+		return nil, fmt.Errorf("AllocateObject: expected type %T, got %T", *new(T), obj)
+	}
+	// delegate to AllocateNewValue for allocation and copy
+	return arena.AllocateNewValue(typedObj)
 }
 
 // Reset clears the buffer and resets the offset to the base alignment.
