@@ -47,11 +47,15 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	return &MemoryArena[T]{buffer: *buffer}, nil
 }
 
+func ptrAt(mem []byte, offset int) unsafe.Pointer {
+	base := unsafe.Pointer(&mem[0])                        // #nosec G103
+	return unsafe.Pointer(uintptr(base) + uintptr(offset)) // #nosec G103
+}
+
 // GetResult returns a pointer to the current offset in the buffer.
 func (arena *MemoryArena[T]) GetResult() unsafe.Pointer {
-	// Audited: compute pointer from base to avoid slice-bound checks and ensure correct alignment
-	base := unsafe.Pointer(&arena.buffer.memory[0])                     // #nosec G103
-	return unsafe.Pointer(uintptr(base) + uintptr(arena.buffer.offset)) // #nosec G103
+	// Audited: compute pointer from base to avoid slizce-bound checks and ensure correct alignment
+	return ptrAt(arena.buffer.memory, arena.buffer.offset) // #nosec G103
 }
 
 // Allocate reserves size bytes and returns a pointer or ErrInvalidSize/ErrArenaFull.
