@@ -111,7 +111,7 @@ func TestAllocationAlignment(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error on initial misaligned allocate: %v", err)
 	}
-	basePtr := unsafe.Pointer(&a.buffer.memory[0])
+	basePtr := unsafe.Pointer(&a.state.Load().buffer.memory[0])
 	base := uintptr(basePtr)
 	ptr, err := a.Allocate(int(unsafe.Sizeof(S{})))
 	if err != nil {
