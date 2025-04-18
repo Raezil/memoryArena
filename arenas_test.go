@@ -1299,3 +1299,68 @@ func TestConcurrentArena_Parallel(t *testing.T) {
 	}
 	wg.Wait()
 }
+
+type S struct {
+	A, B, C, D int64
+}
+
+// BenchmarkNativeNew measures the cost of bare new(S) allocations.
+func BenchmarkNativeNew(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = new(S)
+	}
+}
+
+// BenchmarkMakeSlice measures the cost of allocating a fixed-size slice.
+func BenchmarkMakeSlice(b *testing.B) {
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		_ = make([]S, 1)
+	}
+}
+
+// BenchmarkSyncPool measures sync.Pool Get/Put.
+func BenchmarkSyncPool(b *testing.B) {
+	b.ReportAllocs()
+	pool := sync.Pool{New: func() interface{} { return new(S) }}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		obj := pool.Get().(*S)
+		pool.Put(obj)
+	}
+}
+
+// BenchmarkMemoryArena measures bump allocations via MemoryArena.
+func BenchmarkMemoryArena(b *testing.B) {
+	b.ReportAllocs()
+	// allocate enough space to avoid reallocation
+	size := int(unsafe.Sizeof(S{}))
+	arena, _ := NewMemoryArena[S](b.N * size)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = arena.AllocateObject(S{})
+	}
+}
+
+// BenchmarkAtomicArena measures lock-free bump allocations via AtomicArena.
+func BenchmarkAtomicArena(b *testing.B) {
+	b.ReportAllocs()
+	size := int(unsafe.Sizeof(S{}))
+	atomicArena, _ := NewAtomicArena[S](b.N * size)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = atomicArena.AllocateObject(S{})
+	}
+}
+
+// BenchmarkConcurrentArena measures mutex-based bump allocations via ConcurrentArena.
+func BenchmarkConcurrentArena(b *testing.B) {
+	b.ReportAllocs()
+	size := int(unsafe.Sizeof(S{}))
+	concArena, _ := NewConcurrentArena[S](b.N * size)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = concArena.AllocateObject(S{})
+	}
+}
