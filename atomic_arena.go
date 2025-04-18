@@ -113,16 +113,23 @@ func (arena *AtomicArena[T]) ResizePreserve(newSize int) error {
 	if newSize <= 0 {
 		return ErrInvalidSize
 	}
-	old := arena.state.Load()
-	buf := old.buffer
-	base := uintptr(buf.offset)
-	used := int(old.offset - base)
-	if used > newSize {
-		return ErrNewSizeTooSmall
+	for {
+		old := arena.state.Load()
+		buf := old.buffer
+		// compute how many bytes are in use, beyond the initial alignment
+		base := uintptr(buf.offset)
+		used := int(old.offset - base)
+		if used > newSize {
+			return ErrNewSizeTooSmall
+		}
+		// allocate new buffer and copy the used portion
+		newBuf := NewMemoryArenaBuffer(newSize, arena.alignment)
+		copy(newBuf.memory[newBuf.offset:], buf.memory[buf.offset:buf.offset+used])
+		newState := &arenaState[T]{buffer: newBuf, offset: uintptr(newBuf.offset) + uintptr(used)}
+		// attempt CAS; if it succeeds, we've atomically swapped to the new preserved state
+		if arena.state.CompareAndSwap(old, newState) {
+			return nil
+		}
+		// retry: another goroutine allocated meanwhile, so reload and preserve a larger snapshot
 	}
-	newBuf := NewMemoryArenaBuffer(newSize, arena.alignment)
-	copy(newBuf.memory[newBuf.offset:], buf.memory[buf.offset:buf.offset+used])
-	newState := &arenaState[T]{buffer: newBuf, offset: uintptr(newBuf.offset) + uintptr(used)}
-	arena.state.Store(newState)
-	return nil
 }
