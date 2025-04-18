@@ -298,3 +298,91 @@ func TestResizePreserve_PreservesData(t *testing.T) {
 		t.Fatalf("expected ErrArenaFull after preserve allocations, got %v", err)
 	}
 }
+
+func TestAllocateNewValueAndRead(t *testing.T) {
+	arena, err := NewAtomicArena[int](128)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ptr, err := arena.AllocateNewValue(123)
+	if err != nil {
+		t.Fatal(err)
+	}
+	val := *(*int)(ptr)
+	if val != 123 {
+		t.Errorf("expected 123, got %d", val)
+	}
+}
+
+// TestResizePreserve ensures that ResizePreserve retains existing allocations.
+func TestResizePreserve(t *testing.T) {
+	arena, err := NewAtomicArena[int](64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ptr1, err := arena.AllocateNewValue(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ptr2, err := arena.AllocateNewValue(2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Increase size and preserve
+	err = arena.ResizePreserve(128)
+	if err != nil {
+		t.Fatal(err)
+	}
+	val1 := *(*int)(ptr1)
+	val2 := *(*int)(ptr2)
+	if val1 != 1 || val2 != 2 {
+		t.Errorf("preserve failed: got %d, %d", val1, val2)
+	}
+}
+
+// TestAlignment checks that allocated pointers are correctly aligned.
+func TestAtomicAlignment(t *testing.T) {
+	arena, err := NewAtomicArena[int](128)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Allocate an arbitrary size
+	ptr, err := arena.Allocate(1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if uintptr(ptr)%arena.alignment != 0 {
+		t.Errorf("pointer not aligned: %d modulo %d = %d", uintptr(ptr), arena.alignment, uintptr(ptr)%arena.alignment)
+	}
+}
+
+// TestConcurrentAllocate performs concurrent allocations and verifies data integrity.
+func TestAtomicAllocate(t *testing.T) {
+	arena, err := NewAtomicArena[int](1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	count := 100
+	results := make([]unsafe.Pointer, count)
+
+	for i := 0; i < count; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			ptr, err := arena.AllocateNewValue(i)
+			if err != nil {
+				t.Errorf("alloc failed for %d: %v", i, err)
+				return
+			}
+			results[i] = ptr
+		}(i)
+	}
+	wg.Wait()
+
+	for i, ptr := range results {
+		if *(*int)(ptr) != i {
+			t.Errorf("expected %d at index %d, got %d", i, i, *(*int)(ptr))
+		}
+	}
+}

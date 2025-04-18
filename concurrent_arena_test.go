@@ -394,3 +394,72 @@ func TestConcurrentArena_ResizePreserve_Concurrent(t *testing.T) {
 		t.Errorf("Expected preserved value 99 after ResizePreserve, got %d", val)
 	}
 }
+func TestConcurrentArenaDanglingPointerZeroedAfterFree(t *testing.T) {
+	// Create an arena for uint32 values with 16 bytes capacity
+	arena, err := NewMemoryArena[uint32](16)
+	if err != nil {
+		t.Fatalf("failed to create arena: %v", err)
+	}
+
+	// Allocate space and write a known value
+	size := int(unsafe.Sizeof(uint32(0)))
+	ptr, err := arena.AllocateNewValue(size, uint32(0xDEADBEEF))
+	if err != nil {
+		t.Fatalf("AllocateNewValue failed: %v", err)
+	}
+
+	// Verify the written value
+	val := *(*uint32)(ptr)
+	if val != 0xDEADBEEF {
+		t.Errorf("expected initial value 0xDEADBEEF, got 0x%X", val)
+	}
+
+	// Free the arena (zero and reset)
+	arena.Free()
+
+	// Read from the old pointer: should be zero
+	valAfter := *(*uint32)(ptr)
+	if valAfter != 0 {
+		t.Errorf("expected zero after Free(), got 0x%X", valAfter)
+	}
+}
+
+// Test that after Reset(), previously returned pointers are zeroed out.
+func TestConcurrentArenaDanglingPointerZeroedAfterReset(t *testing.T) {
+	arena, err := NewMemoryArena[uint64](32)
+	if err != nil {
+		t.Fatalf("failed to create arena: %v", err)
+	}
+
+	// Allocate two values
+	size := int(unsafe.Sizeof(uint64(0)))
+	ptr1, err := arena.AllocateNewValue(size, uint64(0xCAFEBABE))
+	if err != nil {
+		t.Fatalf("AllocateNewValue failed: %v", err)
+	}
+	ptr2, err := arena.AllocateNewValue(size, uint64(0xFEEDFACE))
+	if err != nil {
+		t.Fatalf("second AllocateNewValue failed: %v", err)
+	}
+
+	// Check values
+	t1 := *(*uint64)(ptr1)
+	if t1 != 0xCAFEBABE {
+		t.Errorf("expected 0xCAFEBABE at ptr1, got 0x%X", t1)
+	}
+	f1 := *(*uint64)(ptr2)
+	if f1 != 0xFEEDFACE {
+		t.Errorf("expected 0xFEEDFACE at ptr2, got 0x%X", f1)
+	}
+
+	// Reset the arena (should zero and reset offset)
+	arena.Reset()
+
+	// Read from old pointers: expect zero
+	if *(*uint64)(ptr1) != 0 {
+		t.Errorf("expected ptr1 to be zero after Reset(), got 0x%X", *(*uint64)(ptr1))
+	}
+	if *(*uint64)(ptr2) != 0 {
+		t.Errorf("expected ptr2 to be zero after Reset(), got 0x%X", *(*uint64)(ptr2))
+	}
+}
