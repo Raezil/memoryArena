@@ -49,8 +49,9 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 
 // GetResult returns a pointer to the current offset in the buffer.
 func (arena *MemoryArena[T]) GetResult() unsafe.Pointer {
-	// Audited: memory slice backing store safe to reference by pointer
-	return unsafe.Pointer(&arena.buffer.memory[arena.buffer.offset]) // #nosec G103
+	// Audited: compute pointer from base to avoid slice-bound checks and ensure correct alignment
+	base := unsafe.Pointer(&arena.buffer.memory[0])                     // #nosec G103
+	return unsafe.Pointer(uintptr(base) + uintptr(arena.buffer.offset)) // #nosec G103
 }
 
 // Allocate reserves size bytes and returns a pointer or ErrInvalidSize/ErrArenaFull.
