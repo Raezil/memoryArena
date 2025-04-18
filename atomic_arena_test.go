@@ -74,7 +74,6 @@ func TestReset(t *testing.T) {
 
 func TestConcurrentAllocate(t *testing.T) {
 	total := 1000
-	// capacity in bytes: total * size of int
 	a, _ := NewAtomicArena[int](total * int(unsafe.Sizeof(int(0))))
 	var wg sync.WaitGroup
 	ptrs := make([]unsafe.Pointer, total)
@@ -101,24 +100,19 @@ func TestConcurrentAllocate(t *testing.T) {
 	}
 }
 
-// Test that allocations respect type alignment, covering the unaligned offset path.
 func TestAllocationAlignment(t *testing.T) {
 	type S struct {
 		A byte
 		B int32
 	}
 	align := unsafe.Alignof(S{})
-	// capacity enough for a misaligned and aligned allocation
 	a, _ := NewAtomicArena[S](int(align * 3))
-	// first allocate 1 byte to force a misalignment
 	_, err := a.Allocate(1)
 	if err != nil {
 		t.Fatalf("unexpected error on initial misaligned allocate: %v", err)
 	}
-	// record base address
 	basePtr := unsafe.Pointer(&a.buffer.memory[0])
 	base := uintptr(basePtr)
-	// allocate a full S to trigger alignment adjustment
 	ptr, err := a.Allocate(int(unsafe.Sizeof(S{})))
 	if err != nil {
 		t.Fatalf("unexpected error on aligned allocate: %v", err)
@@ -129,7 +123,6 @@ func TestAllocationAlignment(t *testing.T) {
 	}
 }
 
-// Test AllocateNewValue error propagation when arena is full
 func TestAllocateNewValue_ErrArenaFull(t *testing.T) {
 	size := int(unsafe.Sizeof(int(0))) - 1
 	a, _ := NewAtomicArena[int](size)
@@ -139,14 +132,12 @@ func TestAllocateNewValue_ErrArenaFull(t *testing.T) {
 	}
 }
 
-// Test basic allocation and value storage
 func TestAllocateNewValueAndAllocateObject(t *testing.T) {
 	arena, err := NewAtomicArena[int](1024)
 	if err != nil {
 		t.Fatalf("failed to create arena: %v", err)
 	}
 
-	// Test AllocateNewValue
 	ptr, err := arena.AllocateNewValue(42)
 	if err != nil {
 		t.Fatalf("AllocateNewValue failed: %v", err)
@@ -156,7 +147,6 @@ func TestAllocateNewValueAndAllocateObject(t *testing.T) {
 		t.Errorf("expected value 42, got %d", val)
 	}
 
-	// Test AllocateObject with correct type initializes to provided value
 	raw, err := arena.AllocateObject(100)
 	if err != nil {
 		t.Fatalf("AllocateObject failed: %v", err)
@@ -164,33 +154,28 @@ func TestAllocateNewValueAndAllocateObject(t *testing.T) {
 	if *(*int)(raw) != 100 {
 		t.Errorf("expected initialized int 100, got %d", *(*int)(raw))
 	}
-	// Populate and verify overwrite
+
 	*(*int)(raw) = 99
 	if *(*int)(raw) != 99 {
 		t.Errorf("expected stored value 99, got %d", *(*int)(raw))
 	}
 
-	// Test type mismatch
 	if _, err := arena.AllocateObject("string"); err == nil {
 		t.Error("expected error on type mismatch in AllocateObject, got nil")
 	}
 }
 
-// Test Reset zeroes memory and resets offset
 func TestAtomicReset(t *testing.T) {
 	arena, err := NewAtomicArena[int](64)
 	if err != nil {
 		t.Fatalf("failed to create arena: %v", err)
 	}
-	// allocate two values
 	ptr1, _ := arena.AllocateNewValue(7)
 	ptr2, _ := arena.AllocateNewValue(8)
-	// modify
 	*(*int)(ptr1) = 13
 	*(*int)(ptr2) = 17
 
 	arena.Reset()
-	// after reset, next allocation with provided value 0 should initialize to 0
 	newPtr, err := arena.AllocateObject(0)
 	if err != nil {
 		t.Fatalf("AllocateObject after Reset failed: %v", err)
@@ -200,7 +185,6 @@ func TestAtomicReset(t *testing.T) {
 	}
 }
 
-// Test concurrent allocations for thread-safety
 func TestConcurrentAllocations(t *testing.T) {
 	arena, err := NewAtomicArena[uint64](1024 * 10)
 	if err != nil {
@@ -225,4 +209,92 @@ func TestConcurrentAllocations(t *testing.T) {
 		}(uint64(i))
 	}
 	wg.Wait()
+}
+
+// --- Added tests for Resize and ResizePreserve ---
+
+func TestResize_InvalidSize(t *testing.T) {
+	a, _ := NewAtomicArena[int](16)
+	err := a.Resize(0)
+	if err != ErrInvalidSize {
+		t.Fatalf("expected ErrInvalidSize, got %v", err)
+	}
+}
+
+func TestResize_Functionality(t *testing.T) {
+	a, _ := NewAtomicArena[int](4 * int(unsafe.Sizeof(int(0))))
+	// exhaust initial arena
+	for i := 0; i < 4; i++ {
+		if _, err := a.Allocate(int(unsafe.Sizeof(int(0)))); err != nil {
+			t.Fatalf("unexpected error before resize: %v", err)
+		}
+	}
+	// should be full now
+	if _, err := a.Allocate(1); err != ErrArenaFull {
+		t.Fatalf("expected ErrArenaFull, got %v", err)
+	}
+	// resize to larger capacity
+	err := a.Resize(8 * int(unsafe.Sizeof(int(0))))
+	if err != nil {
+		t.Fatalf("unexpected error on resize: %v", err)
+	}
+	// now can allocate up to new capacity
+	for i := 0; i < 8; i++ {
+		if _, err := a.Allocate(int(unsafe.Sizeof(int(0)))); err != nil {
+			t.Fatalf("unexpected error after resize: %v", err)
+		}
+	}
+	// should be full again
+	if _, err := a.Allocate(1); err != ErrArenaFull {
+		t.Fatalf("expected ErrArenaFull after resize allocations, got %v", err)
+	}
+}
+
+func TestResizePreserve_InvalidSize(t *testing.T) {
+	a, _ := NewAtomicArena[int](16)
+	err := a.ResizePreserve(0)
+	if err != ErrInvalidSize {
+		t.Fatalf("expected ErrInvalidSize, got %v", err)
+	}
+}
+
+func TestResizePreserve_TooSmall(t *testing.T) {
+	a, _ := NewAtomicArena[byte](4)
+	// use 2 bytes
+	if _, err := a.Allocate(2); err != nil {
+		t.Fatalf("setup allocate failed: %v", err)
+	}
+	err := a.ResizePreserve(1)
+	if err != ErrNewSizeTooSmall {
+		t.Fatalf("expected ErrNewSizeTooSmall, got %v", err)
+	}
+}
+
+func TestResizePreserve_PreservesData(t *testing.T) {
+	a, _ := NewAtomicArena[int](4 * int(unsafe.Sizeof(int(0))))
+	// allocate two ints
+	ptr1, _ := a.AllocateNewValue(11)
+	ptr2, _ := a.AllocateNewValue(22)
+	// ensure values are stored
+	if *(*int)(ptr1) != 11 || *(*int)(ptr2) != 22 {
+		t.Fatalf("values not stored before resize")
+	}
+	err := a.ResizePreserve(6 * int(unsafe.Sizeof(int(0))))
+	if err != nil {
+		t.Fatalf("unexpected error on ResizePreserve: %v", err)
+	}
+	// original pointers should still hold original values
+	if *(*int)(ptr1) != 11 || *(*int)(ptr2) != 22 {
+		t.Errorf("data not preserved after ResizePreserve: got %d, %d", *(*int)(ptr1), *(*int)(ptr2))
+	}
+	// allocate additional values up to new capacity
+	for i := 0; i < 4; i++ {
+		if _, err := a.Allocate(int(unsafe.Sizeof(int(0)))); err != nil {
+			t.Fatalf("unexpected error allocating after preserve: %v", err)
+		}
+	}
+	// should be full now
+	if _, err := a.Allocate(1); err != ErrArenaFull {
+		t.Fatalf("expected ErrArenaFull after preserve allocations, got %v", err)
+	}
 }
