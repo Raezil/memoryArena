@@ -1364,3 +1364,74 @@ func BenchmarkConcurrentArena(b *testing.B) {
 		_, _ = concArena.AllocateObject(S{})
 	}
 }
+
+const (
+	arenaSize = 1024 * 1024
+	numAllocs = 1000
+)
+
+// TestAtomicArena_ConcurrentAlloc stresses AtomicArena under high concurrency.
+func TestAtomicArena_ConcurrentAlloc(t *testing.T) {
+	a, err := NewAtomicArena[int](arenaSize)
+	if err != nil {
+		t.Fatalf("failed to create AtomicArena: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	results := make([]unsafe.Pointer, numAllocs)
+
+	wg.Add(numAllocs)
+	for i := 0; i < numAllocs; i++ {
+		go func(i int) {
+			defer wg.Done()
+			p, err := a.AllocateNewValue(i)
+			if err != nil {
+				t.Errorf("AllocateNewValue(%d) error: %v", i, err)
+				return
+			}
+			results[i] = p
+		}(i)
+	}
+	wg.Wait()
+
+	// Verify each stored value matches its index.
+	for i, p := range results {
+		val := *(*int)(p)
+		if val != i {
+			t.Errorf("mismatch at slot %d: got %d", i, val)
+		}
+	}
+}
+
+// TestConcurrentArena_ConcurrentAlloc stresses ConcurrentArena under high concurrency.
+func TestConcurrentArena_ConcurrentAlloc(t *testing.T) {
+	ca, err := NewConcurrentArena[int](arenaSize)
+	if err != nil {
+		t.Fatalf("failed to create ConcurrentArena: %v", err)
+	}
+
+	var wg sync.WaitGroup
+	results := make([]unsafe.Pointer, numAllocs)
+
+	wg.Add(numAllocs)
+	for i := 0; i < numAllocs; i++ {
+		go func(i int) {
+			defer wg.Done()
+			p, err := ca.AllocateObject(i)
+			if err != nil {
+				t.Errorf("AllocateObject(%d) error: %v", i, err)
+				return
+			}
+			results[i] = p
+		}(i)
+	}
+	wg.Wait()
+
+	// Verify each stored value matches its index.
+	for i, p := range results {
+		val := *(*int)(p)
+		if val != i {
+			t.Errorf("mismatch at slot %d: got %d", i, val)
+		}
+	}
+}
