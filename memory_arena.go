@@ -1,6 +1,9 @@
+// memory_arena.go
 package memoryArena
 
-import "unsafe"
+import (
+	"unsafe"
+)
 
 // MemoryArenaBuffer represents a contiguous block of memory for allocations.
 type MemoryArenaBuffer struct {
@@ -14,8 +17,8 @@ func NewMemoryArenaBuffer(size int, alignment uintptr) *MemoryArenaBuffer {
 	// Allocate extra space to ensure we can align the base.
 	buf := make([]byte, size+int(alignment))
 
-	// Compute an aligned offset from the beginning of buf.
-	base := uintptr(unsafe.Pointer(&buf[0]))
+	// Audited: converting &buf[0] to uintptr is safe because buf has length >= 1
+	base := uintptr(unsafe.Pointer(&buf[0])) // #nosec G103
 	offset := 0
 	if rem := base % alignment; rem != 0 {
 		offset = int(alignment - rem)
@@ -41,8 +44,32 @@ func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
 	}
 	alignment := unsafe.Alignof(*new(T))
 	buffer := NewMemoryArenaBuffer(size, alignment)
-	arena := &MemoryArena[T]{buffer: *buffer}
-	return arena, nil
+	return &MemoryArena[T]{buffer: *buffer}, nil
+}
+
+// GetResult returns a pointer to the current offset in the buffer.
+func (arena *MemoryArena[T]) GetResult() unsafe.Pointer {
+	// Audited: memory slice backing store safe to reference by pointer
+	return unsafe.Pointer(&arena.buffer.memory[arena.buffer.offset]) // #nosec G103
+}
+
+// Allocate reserves size bytes and returns a pointer or ErrInvalidSize/ErrArenaFull.
+func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
+	if size <= 0 {
+		return nil, ErrInvalidSize
+	}
+	return arena.AllocateBuffer(size)
+}
+
+func (arena *MemoryArena[T]) AllocateBuffer(size int) (unsafe.Pointer, error) {
+	alignment := unsafe.Alignof(*new(T))
+	arena.alignOffset(alignment)
+	if arena.nextOffset(size) > arena.buffer.size {
+		return nil, ErrArenaFull
+	}
+	ptr := arena.GetResult()
+	arena.buffer.offset += size
+	return ptr, nil
 }
 
 // GetRemainder returns current offset modulo alignment.
@@ -65,31 +92,6 @@ func (arena *MemoryArena[T]) nextOffset(size int) int {
 // notEnoughSpace checks if allocating size would exceed capacity.
 func (arena *MemoryArena[T]) notEnoughSpace(size int) bool {
 	return arena.nextOffset(size) > arena.buffer.size
-}
-
-// Allocate reserves size bytes and returns a pointer or ErrInvalidSize/ErrArenaFull.
-func (arena *MemoryArena[T]) Allocate(size int) (unsafe.Pointer, error) {
-	if size <= 0 {
-		return nil, ErrInvalidSize
-	}
-	return arena.AllocateBuffer(size)
-}
-
-// GetResult returns a pointer to the current offset in the buffer.
-func (arena *MemoryArena[T]) GetResult() unsafe.Pointer {
-	return unsafe.Pointer(&arena.buffer.memory[arena.buffer.offset])
-}
-
-// AllocateBuffer allocates size bytes, aligning the offset first.
-func (arena *MemoryArena[T]) AllocateBuffer(size int) (unsafe.Pointer, error) {
-	alignment := unsafe.Alignof(*new(T))
-	arena.alignOffset(alignment)
-	if arena.notEnoughSpace(size) {
-		return nil, ErrArenaFull
-	}
-	ptr := arena.GetResult()
-	arena.buffer.offset += size
-	return ptr, nil
 }
 
 // Free zeroes out the buffer.

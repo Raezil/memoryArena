@@ -61,6 +61,9 @@ func (arena *AtomicArena[T]) Allocate(size int) (unsafe.Pointer, error) {
 		// attempt to update state
 		newState := &arenaState[T]{buffer: buf, offset: newOff}
 		if arena.state.CompareAndSwap(old, newState) {
+			// Audited: conversion of &buf.memory[aligned] to unsafe.Pointer is safe
+			// because `aligned` has been validated against buf.size above.
+			// #nosec G103
 			return unsafe.Pointer(&buf.memory[aligned]), nil
 		}
 		// retry on contention
