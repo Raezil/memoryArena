@@ -93,3 +93,40 @@ func (arena *AtomicArena[T]) Reset() {
 	// reset atomic offset
 	arena.offset.Store(uintptr(arena.buffer.offset))
 }
+
+// Resize resets the arena to newSize, discarding all data.
+// Returns ErrInvalidSize if newSize <= 0.
+func (arena *AtomicArena[T]) Resize(newSize int) error {
+	if newSize <= 0 {
+		return ErrInvalidSize
+	}
+	// create a new buffer with the same alignment
+	newBuf := NewMemoryArenaBuffer(newSize, arena.alignment)
+	arena.buffer = newBuf
+	// reset offset to base offset
+	arena.offset.Store(uintptr(newBuf.offset))
+	return nil
+}
+
+// ResizePreserve resizes the arena to newSize, preserving existing data.
+// Returns ErrInvalidSize if newSize <= 0 or ErrNewSizeTooSmall if used > newSize.
+func (arena *AtomicArena[T]) ResizePreserve(newSize int) error {
+	if newSize <= 0 {
+		return ErrInvalidSize
+	}
+	// compute how many bytes have been used so far
+	oldOff := arena.offset.Load()
+	base := uintptr(arena.buffer.offset)
+	used := int(oldOff - base)
+	if used > newSize {
+		return ErrNewSizeTooSmall
+	}
+	// create new buffer
+	newBuf := NewMemoryArenaBuffer(newSize, arena.alignment)
+	// copy old data into the new buffer
+	copy(newBuf.memory[newBuf.offset:], arena.buffer.memory[arena.buffer.offset:arena.buffer.offset+used])
+	arena.buffer = newBuf
+	// set offset to base + used
+	arena.offset.Store(uintptr(newBuf.offset + used))
+	return nil
+}
