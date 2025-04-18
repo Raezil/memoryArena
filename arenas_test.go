@@ -1435,3 +1435,111 @@ func TestConcurrentArena_ConcurrentAlloc(t *testing.T) {
 		}
 	}
 }
+
+const allocCount = 1024 * 8
+
+// BenchmarkAtomicArena_Allocate measures the cost of successive Allocate calls.
+func BenchmarkAtomicArena_Allocate(b *testing.B) {
+	arena, err := NewAtomicArena[uint64](allocCount)
+	if err != nil {
+		b.Fatalf("failed to create arena: %v", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		arena.Reset()
+		b.StartTimer()
+		_, err := arena.Allocate(int(unsafe.Sizeof(uint64(0))))
+		if err != nil {
+			b.Fatalf("allocate error: %v", err)
+		}
+	}
+}
+
+// BenchmarkAtomicArena_AllocateNewValue measures cost of AllocateNewValue.
+func BenchmarkAtomicArena_AllocateNewValue(b *testing.B) {
+	arena, err := NewAtomicArena[uint64](allocCount)
+	if err != nil {
+		b.Fatalf("failed to create arena: %v", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		arena.Reset()
+		b.StartTimer()
+		_, err := arena.AllocateNewValue(uint64(i))
+		if err != nil {
+			b.Fatalf("allocate new value error: %v", err)
+		}
+	}
+}
+
+// BenchmarkNew measures the cost of allocating a new uint64 via built-in new.
+func BenchmarkNew(b *testing.B) {
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_ = new(uint64)
+	}
+}
+
+// BenchmarkAtomicArena_Reset measures cost of Reset on a pre-sized arena.
+func BenchmarkAtomicArena_Reset(b *testing.B) {
+	arena, err := NewAtomicArena[uint64](allocCount)
+	if err != nil {
+		b.Fatalf("failed to create arena: %v", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		arena.Reset()
+	}
+}
+
+// BenchmarkAtomicArena_AllocateObject measures cost of AllocateObject.
+func BenchmarkAtomicArena_AllocateObject(b *testing.B) {
+	arena, err := NewAtomicArena[uint64](allocCount)
+	if err != nil {
+		b.Fatalf("failed to create arena: %v", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		b.StopTimer()
+		arena.Reset()
+		b.StartTimer()
+		_, err := arena.AllocateObject(uint64(i))
+		if err != nil {
+			b.Fatalf("allocate object error: %v", err)
+		}
+	}
+}
+
+// BenchmarkAtomicArena_Resize measures cost of Resize discarding all data.
+func BenchmarkAtomicArena_Resize(b *testing.B) {
+	arena, err := NewAtomicArena[uint64](allocCount)
+	if err != nil {
+		b.Fatalf("failed to create arena: %v", err)
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := arena.Resize(allocCount); err != nil {
+			b.Fatalf("resize error: %v", err)
+		}
+	}
+}
+
+// BenchmarkAtomicArena_ResizePreserve measures cost of ResizePreserve preserving existing data.
+func BenchmarkAtomicArena_ResizePreserve(b *testing.B) {
+	arena, err := NewAtomicArena[uint64](allocCount)
+	if err != nil {
+		b.Fatalf("failed to create arena: %v", err)
+	}
+	// pre-populate some data to preserve
+	for i := 0; i < allocCount/int(unsafe.Sizeof(uint64(0))); i++ {
+		arena.AllocateNewValue(uint64(i))
+	}
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if err := arena.ResizePreserve(allocCount); err != nil {
+			b.Fatalf("resize preserve error: %v", err)
+		}
+	}
+}
