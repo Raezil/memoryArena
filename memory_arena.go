@@ -94,11 +94,6 @@ func (arena *MemoryArena[T]) nextOffset(size int) int {
 	return arena.buffer.offset + size
 }
 
-// notEnoughSpace checks if allocating size would exceed capacity.
-func (arena *MemoryArena[T]) notEnoughSpace(size int) bool {
-	return arena.nextOffset(size) > arena.buffer.size
-}
-
 // Free zeroes out the buffer.
 func (arena *MemoryArena[T]) Free() {
 	for i := range arena.buffer.memory {
