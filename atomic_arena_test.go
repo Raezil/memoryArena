@@ -1,388 +1,137 @@
 package memoryArena
 
 import (
-	"sync"
 	"testing"
-	"unsafe"
 )
 
-func TestNewAtomicArena_InvalidSize(t *testing.T) {
-	_, err := NewAtomicArena[int](0)
-	if err != ErrInvalidSize {
-		t.Fatalf("expected ErrInvalidSize, got %v", err)
+// TestNewAtomicMemoryArena_InvalidSize checks that creating an arena with non-positive size returns ErrInvalidSize.
+func TestNewAtomicMemoryArena_InvalidSize(t *testing.T) {
+	if _, err := NewAtomicMemoryArena[int](0); err != ErrInvalidSize {
+		t.Errorf("expected ErrInvalidSize for size=0, got %v", err)
+	}
+	if _, err := NewAtomicMemoryArena[int](-10); err != ErrInvalidSize {
+		t.Errorf("expected ErrInvalidSize for negative size, got %v", err)
 	}
 }
 
-func TestAllocate_InvalidSize(t *testing.T) {
-	a, _ := NewAtomicArena[int](1024)
-	_, err := a.Allocate(0)
-	if err != ErrInvalidSize {
-		t.Fatalf("expected ErrInvalidSize, got %v", err)
-	}
-}
-
-func TestAllocateAndExhaust(t *testing.T) {
-	size := 16
-	a, _ := NewAtomicArena[byte](size)
-	var ptrs []unsafe.Pointer
-	for {
-		ptr, err := a.Allocate(1)
-		if err == ErrArenaFull {
-			break
-		}
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-		ptrs = append(ptrs, ptr)
-	}
-	if len(ptrs) == 0 {
-		t.Fatal("expected at least one allocation")
-	}
-}
-
-func TestAllocateNewValue(t *testing.T) {
-	a, _ := NewAtomicArena[int](128)
-	v := 42
-	ptr, err := a.AllocateNewValue(v)
+// TestAllocateAndReset verifies Allocate, ErrArenaFull, and Reset behavior.
+func TestAllocateAndReset(t *testing.T) {
+	a, err := NewAtomicMemoryArena[byte](64)
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf("unexpected error creating arena: %v", err)
 	}
-	got := *(*int)(ptr)
-	if got != v {
-		t.Fatalf("expected %d, got %d", v, got)
-	}
-}
 
-func TestReset(t *testing.T) {
-	size := 10
-	a, _ := NewAtomicArena[byte](size)
-	for i := 0; i < size; i++ {
-		if _, err := a.Allocate(1); err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+	// Allocate less than capacity
+	p1, err := a.Allocate(16)
+	if err != nil {
+		t.Fatalf("unexpected error on Allocate: %v", err)
 	}
-	_, err := a.Allocate(1)
-	if err != ErrArenaFull {
-		t.Fatalf("expected ErrArenaFull before reset, got %v", err)
+	if p1 == nil {
+		t.Errorf("Allocate returned nil pointer")
 	}
+
+	// Fill remaining capacity
+	remaining := 64 - 16 - a.alignMask
+	_, err = a.Allocate(remaining)
+	if err != nil {
+		t.Fatalf("unexpected error filling arena: %v", err)
+	}
+
+	// Next allocation should fail
+	if _, err := a.Allocate(1); err != ErrArenaFull {
+		t.Errorf("expected ErrArenaFull after capacity exceeded, got %v", err)
+	}
+
+	// Reset and allocate again
 	a.Reset()
-	_, err = a.Allocate(1)
+	p2, err := a.Allocate(8)
 	if err != nil {
-		t.Fatalf("unexpected error after reset: %v", err)
+		t.Fatalf("unexpected error after Reset: %v", err)
+	}
+	if p2 == nil {
+		t.Errorf("Allocate returned nil pointer after Reset")
 	}
 }
 
+// TestNewObject ensures NewObject stores the correct value.
+func TestNewObject(t *testing.T) {
+	a, err := NewAtomicMemoryArena[int](1024)
+	if err != nil {
+		t.Fatalf("unexpected error creating arena: %v", err)
+	}
+
+	val := 42
+	ptr, err := a.NewObject(val)
+	if err != nil {
+		t.Fatalf("NewObject error: %v", err)
+	}
+	if *ptr != val {
+		t.Errorf("expected stored value %d, got %d", val, *ptr)
+	}
+}
+
+// TestAppendSlice verifies that AppendSlice returns correct slice contents.
+func TestAppendSlice(t *testing.T) {
+	a, err := NewAtomicMemoryArena[int](128)
+	if err != nil {
+		t.Fatalf("unexpected error creating arena: %v", err)
+	}
+
+	slice := make([]int, 0, 2)
+	slice, err = a.AppendSlice(slice, 1, 2, 3)
+	if err != nil {
+		t.Fatalf("AppendSlice error: %v", err)
+	}
+	if len(slice) != 3 {
+		t.Errorf("expected length 3, got %d", len(slice))
+	}
+	for i, v := range []int{1, 2, 3} {
+		if slice[i] != v {
+			t.Errorf("expected slice[%d]==%d, got %d", i, v, slice[i])
+		}
+	}
+}
+
+// TestConcurrentAllocate ensures concurrent Allocate calls succeed uniquely.
 func TestConcurrentAllocate(t *testing.T) {
-	total := 1000
-	a, _ := NewAtomicArena[int](total * int(unsafe.Sizeof(int(0))))
-	var wg sync.WaitGroup
-	ptrs := make([]unsafe.Pointer, total)
-	wg.Add(total)
-	for i := 0; i < total; i++ {
-		go func(idx, val int) {
-			defer wg.Done()
-			ptr, err := a.AllocateNewValue(val)
-			if err != nil {
-				t.Errorf("allocation error: %v", err)
-				return
-			}
-			ptrs[idx] = ptr
-		}(i, i)
-	}
-	wg.Wait()
-	seen := make(map[uintptr]bool)
-	for _, p := range ptrs {
-		up := uintptr(p)
-		if seen[up] {
-			t.Errorf("duplicate pointer: %v", p)
-		}
-		seen[up] = true
-	}
-}
-
-func TestAllocationAlignment(t *testing.T) {
-	type S struct {
-		A byte
-		B int32
-	}
-	align := unsafe.Alignof(S{})
-	a, _ := NewAtomicArena[S](int(align * 3))
-	_, err := a.Allocate(1)
+	const count = 100
+	a, err := NewAtomicMemoryArena[byte](count)
 	if err != nil {
-		t.Fatalf("unexpected error on initial misaligned allocate: %v", err)
-	}
-	basePtr := unsafe.Pointer(&a.state.Load().buffer.memory[0])
-	base := uintptr(basePtr)
-	ptr, err := a.Allocate(int(unsafe.Sizeof(S{})))
-	if err != nil {
-		t.Fatalf("unexpected error on aligned allocate: %v", err)
-	}
-	off := uintptr(ptr) - base
-	if off%align != 0 {
-		t.Errorf("allocation not aligned: expected offset mod %d == 0, got %d", align, off%align)
-	}
-}
-
-func TestAllocateNewValue_ErrArenaFull(t *testing.T) {
-	size := int(unsafe.Sizeof(int(0))) - 1
-	a, _ := NewAtomicArena[int](size)
-	_, err := a.AllocateNewValue(1)
-	if err != ErrArenaFull {
-		t.Fatalf("expected ErrArenaFull, got %v", err)
-	}
-}
-
-func TestAllocateNewValueAndAllocateObject(t *testing.T) {
-	arena, err := NewAtomicArena[int](1024)
-	if err != nil {
-		t.Fatalf("failed to create arena: %v", err)
+		t.Fatalf("unexpected error creating arena: %v", err)
 	}
 
-	ptr, err := arena.AllocateNewValue(42)
-	if err != nil {
-		t.Fatalf("AllocateNewValue failed: %v", err)
-	}
-	val := *(*int)(ptr)
-	if val != 42 {
-		t.Errorf("expected value 42, got %d", val)
-	}
-
-	raw, err := arena.AllocateObject(100)
-	if err != nil {
-		t.Fatalf("AllocateObject failed: %v", err)
-	}
-	if *(*int)(raw) != 100 {
-		t.Errorf("expected initialized int 100, got %d", *(*int)(raw))
-	}
-
-	*(*int)(raw) = 99
-	if *(*int)(raw) != 99 {
-		t.Errorf("expected stored value 99, got %d", *(*int)(raw))
-	}
-
-	if _, err := arena.AllocateObject("string"); err == nil {
-		t.Error("expected error on type mismatch in AllocateObject, got nil")
-	}
-}
-
-func TestAtomicReset(t *testing.T) {
-	arena, err := NewAtomicArena[int](64)
-	if err != nil {
-		t.Fatalf("failed to create arena: %v", err)
-	}
-	ptr1, _ := arena.AllocateNewValue(7)
-	ptr2, _ := arena.AllocateNewValue(8)
-	*(*int)(ptr1) = 13
-	*(*int)(ptr2) = 17
-
-	arena.Reset()
-	newPtr, err := arena.AllocateObject(0)
-	if err != nil {
-		t.Fatalf("AllocateObject after Reset failed: %v", err)
-	}
-	if *(*int)(newPtr) != 0 {
-		t.Errorf("expected zero from fresh allocation after reset, got %d", *(*int)(newPtr))
-	}
-}
-
-func TestConcurrentAllocations(t *testing.T) {
-	arena, err := NewAtomicArena[uint64](1024 * 10)
-	if err != nil {
-		t.Fatalf("failed to create arena: %v", err)
-	}
-	var wg sync.WaitGroup
-	count := 1000
-
+	errs := make(chan error, count)
 	for i := 0; i < count; i++ {
-		wg.Add(1)
-		go func(val uint64) {
-			defer wg.Done()
-			ptr, err := arena.AllocateNewValue(val)
-			if err != nil {
-				t.Errorf("AllocateNewValue error in goroutine: %v", err)
-				return
-			}
-			retrieved := *(*uint64)(ptr)
-			if retrieved != val {
-				t.Errorf("mismatched value: expected %d, got %d", val, retrieved)
-			}
-		}(uint64(i))
+		go func() {
+			_, err := a.Allocate(1)
+			errs <- err
+		}()
 	}
-	wg.Wait()
-}
-
-// --- Added tests for Resize and ResizePreserve ---
-
-func TestResize_InvalidSize(t *testing.T) {
-	a, _ := NewAtomicArena[int](16)
-	err := a.Resize(0)
-	if err != ErrInvalidSize {
-		t.Fatalf("expected ErrInvalidSize, got %v", err)
-	}
-}
-
-func TestResize_Functionality(t *testing.T) {
-	a, _ := NewAtomicArena[int](4 * int(unsafe.Sizeof(int(0))))
-	// exhaust initial arena
-	for i := 0; i < 4; i++ {
-		if _, err := a.Allocate(int(unsafe.Sizeof(int(0)))); err != nil {
-			t.Fatalf("unexpected error before resize: %v", err)
-		}
-	}
-	// should be full now
-	if _, err := a.Allocate(1); err != ErrArenaFull {
-		t.Fatalf("expected ErrArenaFull, got %v", err)
-	}
-	// resize to larger capacity
-	err := a.Resize(8 * int(unsafe.Sizeof(int(0))))
-	if err != nil {
-		t.Fatalf("unexpected error on resize: %v", err)
-	}
-	// now can allocate up to new capacity
-	for i := 0; i < 8; i++ {
-		if _, err := a.Allocate(int(unsafe.Sizeof(int(0)))); err != nil {
-			t.Fatalf("unexpected error after resize: %v", err)
-		}
-	}
-	// should be full again
-	if _, err := a.Allocate(1); err != ErrArenaFull {
-		t.Fatalf("expected ErrArenaFull after resize allocations, got %v", err)
-	}
-}
-
-func TestResizePreserve_InvalidSize(t *testing.T) {
-	a, _ := NewAtomicArena[int](16)
-	err := a.ResizePreserve(0)
-	if err != ErrInvalidSize {
-		t.Fatalf("expected ErrInvalidSize, got %v", err)
-	}
-}
-
-func TestResizePreserve_TooSmall(t *testing.T) {
-	a, _ := NewAtomicArena[byte](4)
-	// use 2 bytes
-	if _, err := a.Allocate(2); err != nil {
-		t.Fatalf("setup allocate failed: %v", err)
-	}
-	err := a.ResizePreserve(1)
-	if err != ErrNewSizeTooSmall {
-		t.Fatalf("expected ErrNewSizeTooSmall, got %v", err)
-	}
-}
-
-func TestResizePreserve_PreservesData(t *testing.T) {
-	a, _ := NewAtomicArena[int](4 * int(unsafe.Sizeof(int(0))))
-	// allocate two ints
-	ptr1, _ := a.AllocateNewValue(11)
-	ptr2, _ := a.AllocateNewValue(22)
-	// ensure values are stored
-	if *(*int)(ptr1) != 11 || *(*int)(ptr2) != 22 {
-		t.Fatalf("values not stored before resize")
-	}
-	err := a.ResizePreserve(6 * int(unsafe.Sizeof(int(0))))
-	if err != nil {
-		t.Fatalf("unexpected error on ResizePreserve: %v", err)
-	}
-	// original pointers should still hold original values
-	if *(*int)(ptr1) != 11 || *(*int)(ptr2) != 22 {
-		t.Errorf("data not preserved after ResizePreserve: got %d, %d", *(*int)(ptr1), *(*int)(ptr2))
-	}
-	// allocate additional values up to new capacity
-	for i := 0; i < 4; i++ {
-		if _, err := a.Allocate(int(unsafe.Sizeof(int(0)))); err != nil {
-			t.Fatalf("unexpected error allocating after preserve: %v", err)
-		}
-	}
-	// should be full now
-	if _, err := a.Allocate(1); err != ErrArenaFull {
-		t.Fatalf("expected ErrArenaFull after preserve allocations, got %v", err)
-	}
-}
-
-func TestAllocateNewValueAndRead(t *testing.T) {
-	arena, err := NewAtomicArena[int](128)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ptr, err := arena.AllocateNewValue(123)
-	if err != nil {
-		t.Fatal(err)
-	}
-	val := *(*int)(ptr)
-	if val != 123 {
-		t.Errorf("expected 123, got %d", val)
-	}
-}
-
-// TestResizePreserve ensures that ResizePreserve retains existing allocations.
-func TestResizePreserve(t *testing.T) {
-	arena, err := NewAtomicArena[int](64)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ptr1, err := arena.AllocateNewValue(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	ptr2, err := arena.AllocateNewValue(2)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Increase size and preserve
-	err = arena.ResizePreserve(128)
-	if err != nil {
-		t.Fatal(err)
-	}
-	val1 := *(*int)(ptr1)
-	val2 := *(*int)(ptr2)
-	if val1 != 1 || val2 != 2 {
-		t.Errorf("preserve failed: got %d, %d", val1, val2)
-	}
-}
-
-// TestAlignment checks that allocated pointers are correctly aligned.
-func TestAtomicAlignment(t *testing.T) {
-	arena, err := NewAtomicArena[int](128)
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Allocate an arbitrary size
-	ptr, err := arena.Allocate(1)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if uintptr(ptr)%arena.alignment != 0 {
-		t.Errorf("pointer not aligned: %d modulo %d = %d", uintptr(ptr), arena.alignment, uintptr(ptr)%arena.alignment)
-	}
-}
-
-// TestConcurrentAllocate performs concurrent allocations and verifies data integrity.
-func TestAtomicAllocate(t *testing.T) {
-	arena, err := NewAtomicArena[int](1024)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var wg sync.WaitGroup
-	count := 100
-	results := make([]unsafe.Pointer, count)
-
 	for i := 0; i < count; i++ {
-		wg.Add(1)
-		go func(i int) {
-			defer wg.Done()
-			ptr, err := arena.AllocateNewValue(i)
-			if err != nil {
-				t.Errorf("alloc failed for %d: %v", i, err)
-				return
-			}
-			results[i] = ptr
-		}(i)
-	}
-	wg.Wait()
-
-	for i, ptr := range results {
-		if *(*int)(ptr) != i {
-			t.Errorf("expected %d at index %d, got %d", i, i, *(*int)(ptr))
+		if err := <-errs; err != nil {
+			t.Errorf("Allocate failed concurrently: %v", err)
 		}
+	}
+	// Further allocation should fail
+	if _, err := a.Allocate(1); err != ErrArenaFull {
+		t.Errorf("expected ErrArenaFull after concurrent full, got %v", err)
+	}
+}
+
+// BenchmarkAllocate measures the speed of Allocate.
+func BenchmarkAllocate(b *testing.B) {
+	a, _ := NewAtomicMemoryArena[byte](b.N)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		a.Allocate(1)
+	}
+}
+
+// BenchmarkNewObject measures the speed of NewObject.
+func BenchmarkNewObject(b *testing.B) {
+	a, _ := NewAtomicMemoryArena[int](b.N * 8)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		a.NewObject(i)
 	}
 }

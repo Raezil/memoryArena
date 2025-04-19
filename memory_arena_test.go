@@ -1,594 +1,413 @@
 package memoryArena
 
 import (
+	"fmt"
+	"runtime"
+	"sync"
 	"testing"
 	"unsafe"
 )
 
-func TestMemoryArena(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	ptr, err := arena.Allocate(10)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	if ptr == nil {
-		t.Errorf("Error: ptr is nil")
-	}
+// /////////////////////////////////////////////////////////////////////////////
+//                              UNIT TESTS
+// /////////////////////////////////////////////////////////////////////////////
 
+type point struct{ X, Y int }
+
+type tiny byte
+
+func TestNewObject_roundTrip(t *testing.T) {
+	arena, _ := NewMemoryArena[point](1024)
+	p, err := arena.NewObject(point{3, 4})
+	if err != nil {
+		t.Fatalf("NewObject: %v", err)
+	}
+	if p.X != 3 || p.Y != 4 {
+		t.Fatalf("value mismatch got=%+v", *p)
+	}
 }
 
-func TestMemoryArena_Reset(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
+func TestAllocate_alignment(t *testing.T) {
+	arena, _ := NewMemoryArena[uint64](128)
+	for i := 0; i < 4; i++ {
+		ptr, _ := arena.Allocate(1)
+		if off := uintptr(ptr) & 7; off != 0 {
+			t.Fatalf("ptr not 8‑byte aligned: %x", off)
+		}
+	}
+}
+
+func TestReset_zeroesUsedBytes(t *testing.T) {
+	arena, _ := NewMemoryArena[byte](64)
+	// fill 16 bytes with 0xAA
+	ptr, _ := arena.Allocate(16)
+	slice := unsafe.Slice((*byte)(ptr), 16)
+	for i := range slice {
+		slice[i] = 0xAA
 	}
 	arena.Reset()
-
-	for i := range arena.buffer.memory {
-		if arena.buffer.memory[i] != 0 {
-			t.Errorf("Error: memory is not reset")
+	ptr2, _ := arena.Allocate(16)
+	slice2 := unsafe.Slice((*byte)(ptr2), 16)
+	for i, v := range slice2 {
+		if v != 0 {
+			t.Fatalf("byte %d not zero (%x)", i, v)
 		}
 	}
 }
 
-func TestMemoryArena_Free(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	arena.Free()
-
-	for i := range arena.buffer.memory {
-		if arena.buffer.memory[i] != 0 {
-			t.Errorf("Error: memory is not freed")
-		}
-	}
-}
-
-func TestMemoryArena_nextOffset(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	if arena.nextOffset(10) != 10 {
-		t.Errorf("Error: used capacity is not correct")
-	}
-}
-
-func TestMemoryArena_alignOffset(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	arena.alignOffset(8)
-	if arena.buffer.offset != 0 {
-		t.Errorf("Error: offset is not aligned")
-	}
-}
-
-func TestMemoryArenaBuffer_NewMemoryArenaBuffer(t *testing.T) {
-	arena := NewMemoryArenaBuffer(100, 1)
-	if arena.size != 100 {
-		t.Errorf("Error: size is not correct")
-	}
-	if arena.offset != 0 {
-		t.Errorf("Error: offset is not correct")
-	}
-}
-
-func TestMemoryArenaResizePreserve(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-
-	num, err := NewObject(arena, 5)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	arena.ResizePreserve(200)
-	if arena.buffer.size != 200 {
-		t.Errorf("Error: size is not preserved")
-	}
-	if *num != 5 {
-		t.Errorf("Error: object is not preserved")
-	}
-
-}
-
-func TestMemoryArenaResize(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	arena.Resize(200)
-	if arena.buffer.size != 200 {
-		t.Errorf("Error: size is not resized")
-	}
-
-}
-
-func TestMemoryArenaAllocate(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	ptr, err := arena.Allocate(10)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	if ptr == nil {
-		t.Errorf("Error: ptr is nil")
-	}
-
-}
-
-func TestMemoryArenaAllocateBuffer(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	ptr, err := arena.AllocateBuffer(10)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	if ptr == nil {
-		t.Errorf("Error: ptr is nil")
-	}
-
-}
-
-func TestMemoryArena_AllocateNewValue(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	obj := 5
-	ptr, err := arena.AllocateNewValue(10, obj)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	if ptr == nil {
-		t.Errorf("Error: ptr is nil")
-	}
-}
-
-func TestMemoryArena_GetResult(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	ptr := arena.GetResult()
-	if ptr == nil {
-		t.Errorf("Error: ptr is nil")
-	}
-}
-
-func TestMemoryArena_AllocateObject(t *testing.T) {
-	arena, err := NewMemoryArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	obj := 5
-	_, err = arena.AllocateObject(obj)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-}
-
-// TestMemoryArenaBuffer_AlignmentCheck verifies that the effective base of the arena buffer is aligned.
-func TestMemoryArenaBuffer_AlignmentCheck(t *testing.T) {
-	// Test for a couple of alignment values.
-	testCases := []struct {
-		name      string
-		alignment uintptr
-	}{
-		{"Alignment1", 1},
-		{"Alignment8", 8},
-		{"Alignment16", 16},
-	}
-
-	for _, tc := range testCases {
-		// Create a new arena buffer with the given alignment.
-		buffer := NewMemoryArenaBuffer(100, tc.alignment)
-		basePtr := uintptr(unsafe.Pointer(&buffer.memory[0]))
-		effectivePtr := basePtr + uintptr(buffer.offset)
-		if effectivePtr%tc.alignment != 0 {
-			t.Errorf("%s: effective pointer %#x is not aligned to %d bytes",
-				tc.name, effectivePtr, tc.alignment)
-		} else {
-			t.Logf("%s: effective pointer %#x is correctly aligned to %d bytes",
-				tc.name, effectivePtr, tc.alignment)
-		}
-	}
-}
-
-// TestMemoryArena_AllocationAlignment ensures that allocations return pointers that obey the type’s alignment.
-func TestMemoryArena_AllocationAlignment(t *testing.T) {
-	// Use int64 for which alignment is typically 8 bytes on 64-bit systems.
-	arena, err := NewMemoryArena[int](10)
-	if err != nil {
-		t.Fatalf("Failed to create arena: %v", err)
-	}
-
-	ptr, err := arena.Allocate(8) // Allocate space for an int64.
-	if err != nil {
-		t.Fatalf("Allocation failed: %v", err)
-	}
-
-	effective := uintptr(ptr)
-	requiredAlignment := uintptr(unsafe.Alignof(int64(0)))
-	if effective%requiredAlignment != 0 {
-		t.Errorf("Allocated pointer %#x is not aligned to %d bytes", effective, requiredAlignment)
-	} else {
-		t.Logf("Allocated pointer %#x is correctly aligned to %d bytes", effective, requiredAlignment)
-	}
-}
-
-// TestMemoryArena_AllocateObjectAlignment checks that the pointer returned by AllocateObject
-// is also aligned according to the type requirements.
-func TestMemoryArena_AllocateObjectAlignment(t *testing.T) {
-	type MyStruct struct {
-		A int64
-		B int32
-	}
-	arena, err := NewMemoryArena[MyStruct](100)
-	if err != nil {
-		t.Fatalf("Failed to create arena: %v", err)
-	}
-
-	obj := MyStruct{A: 42, B: 7}
-	ptr, err := arena.AllocateObject(obj)
-	if err != nil {
-		t.Fatalf("AllocateObject failed: %v", err)
-	}
-
-	effective := uintptr(ptr)
-	requiredAlignment := uintptr(unsafe.Alignof(MyStruct{}))
-	if effective%requiredAlignment != 0 {
-		t.Errorf("Object pointer %#x is not aligned to %d bytes", effective, requiredAlignment)
-	} else {
-		t.Logf("Object pointer %#x is correctly aligned to %d bytes", effective, requiredAlignment)
-	}
-}
-
-// TestNewMemoryArenaBuffer_AlignmentOne verifies that when using an alignment of 1,
-// no offset is needed.
-func TestNewMemoryArenaBuffer_AlignmentOne(t *testing.T) {
-	buf := NewMemoryArenaBuffer(100, 1)
-	if buf.size != 100 {
-		t.Errorf("expected size 100, got %d", buf.size)
-	}
-	if buf.offset != 0 {
-		t.Errorf("expected offset 0 for alignment 1, got %d", buf.offset)
-	}
-	// Effective pointer check
-	base := uintptr(unsafe.Pointer(&buf.memory[0]))
-	effective := base + uintptr(buf.offset)
-	if effective%1 != 0 {
-		t.Errorf("effective pointer %#x is not aligned to 1 byte", effective)
-	}
-}
-
-// TestNewMemoryArenaBuffer_LargeAlignment forces a misalignment branch.
-// Using a large alignment (e.g. 4096) makes it very unlikely that the base is already aligned.
-func TestNewMemoryArenaBuffer_LargeAlignment(t *testing.T) {
-	const alignment = 4096
-	buf := NewMemoryArenaBuffer(100, alignment)
-	base := uintptr(unsafe.Pointer(&buf.memory[0]))
-	remainder := base % alignment
-	var expectedOffset int
-	if remainder == 0 {
-		// In the unlikely event that the base is aligned.
-		expectedOffset = 0
-	} else {
-		expectedOffset = int(alignment - remainder)
-	}
-	if buf.offset != expectedOffset {
-		t.Errorf("expected offset %d (base=0x%x, remainder=%d), got %d",
-			expectedOffset, base, remainder, buf.offset)
-	}
-	// Ensure the effective pointer is aligned
-	effective := base + uintptr(buf.offset)
-	if effective%alignment != 0 {
-		t.Errorf("effective pointer %#x is not aligned to %d bytes", effective, alignment)
-	}
-}
-
-// TestNewMemoryArenaBuffer_AlternateAlignment tests a typical alignment (e.g. 8)
-// and verifies that the computed offset is correct.
-func TestNewMemoryArenaBuffer_AlternateAlignment(t *testing.T) {
-	const alignment = 8
-	buf := NewMemoryArenaBuffer(100, alignment)
-	base := uintptr(unsafe.Pointer(&buf.memory[0]))
-	remainder := base % alignment
-	var expectedOffset int
-	if remainder == 0 {
-		expectedOffset = 0
-	} else {
-		expectedOffset = int(alignment - remainder)
-	}
-	if buf.offset != expectedOffset {
-		t.Errorf("expected offset %d for alignment %d (base=0x%x, remainder=%d), got %d",
-			expectedOffset, alignment, base, remainder, buf.offset)
-	}
-	effective := base + uintptr(buf.offset)
-	if effective%alignment != 0 {
-		t.Errorf("effective pointer %#x is not aligned to %d bytes", effective, alignment)
-	}
-}
-
-const benchmarkArenaSize = 1 << 20 // 1 MB - adjust as needed
-
-func BenchmarkMemoryArena_AllocateObject(b *testing.B) {
-	arena, err := NewMemoryArena[int](benchmarkArenaSize) // Increased size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err) // Use Fatalf for setup errors
-	}
-	obj := 5
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		arena.Reset() // Reset for each allocation benchmark iteration
-		_, err = arena.AllocateObject(obj)
+func TestAppendSlice_growth(t *testing.T) {
+	arena, _ := NewMemoryArena[int](4096)
+	var s []int
+	var err error
+	for i := 0; i < 40; i++ {
+		s, err = arena.AppendSlice(s, i)
 		if err != nil {
-			b.Fatalf("Iteration %d: AllocateObject failed: %v", i, err) // Use Fatalf
+			t.Fatalf("AppendSlice: %v", err)
+		}
+	}
+	if len(s) != 40 || cap(s) < 40 || s[39] != 39 {
+		t.Fatalf("unexpected slice %v (cap %d)", s, cap(s))
+	}
+}
+
+// /////////////////////////////////////////////////////////////////////////////
+//                          CONCURRENCY TESTS
+// /////////////////////////////////////////////////////////////////////////////
+
+func TestArena_mutexProtection(t *testing.T) {
+	// NOTE: arena is NOT thread‑safe, but demonstrate external sync correctness.
+	arena, _ := NewMemoryArena[point](1 << 20)
+	var mu sync.Mutex
+	wg := sync.WaitGroup{}
+	for g := 0; g < runtime.NumCPU(); g++ {
+		wg.Add(1)
+		go func(seed int) {
+			defer wg.Done()
+			for i := 0; i < 1_000; i++ {
+				mu.Lock()
+				_, err := arena.NewObject(point{X: seed, Y: i})
+				mu.Unlock()
+				if err != nil {
+					t.Errorf("alloc err: %v", err)
+					return
+				}
+			}
+		}(g)
+	}
+	wg.Wait()
+}
+
+// /////////////////////////////////////////////////////////////////////////////
+//                              BENCHMARKS
+// /////////////////////////////////////////////////////////////////////////////
+
+func BenchmarkAllocate64B(b *testing.B) {
+	arena, _ := NewMemoryArena[byte](1 << 20) // 1 MiB arena
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := arena.Allocate(64); err != nil {
+			if err != ErrArenaFull {
+				b.Fatal(err)
+			}
+			arena.Reset()
+			if _, err := arena.Allocate(64); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}
 }
 
-func BenchmarkMemoryArena_AllocateNewValue(b *testing.B) {
-	arena, err := NewMemoryArena[int](benchmarkArenaSize) // Increased size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	obj := 5
-	size := int(unsafe.Sizeof(obj))
+func BenchmarkNewObject_small(b *testing.B) {
+	arena, _ := NewMemoryArena[point](1 << 20)
+	val := point{1, 2}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		arena.Reset() // Reset for each allocation benchmark iteration
-		_, err = arena.AllocateNewValue(size, obj)
+		if _, err := arena.NewObject(val); err != nil {
+			if err != ErrArenaFull {
+				b.Fatal(err)
+			}
+			arena.Reset()
+			if _, err := arena.NewObject(val); err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+}
+
+func BenchmarkNewObject_big(b *testing.B) {
+	arena, _ := NewMemoryArena[big](4 << 20) // 4 MiB
+	var val big
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := arena.NewObject(val); err != nil {
+			if err != ErrArenaFull {
+				b.Fatal(err)
+			}
+			arena.Reset()
+			if _, err := arena.NewObject(val); err != nil {
+				b.Fatal(err)
+			}
+		}
+	}
+}
+
+func BenchmarkAppendSliceGrow(b *testing.B) {
+	arena, _ := NewMemoryArena[int](1 << 20)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		var s []int
+		var err error
+		for n := 0; n < 200; n++ {
+			s, err = arena.AppendSlice(s, n)
+			if err != nil {
+				if err != ErrArenaFull {
+					b.Fatal(err)
+				}
+				arena.Reset()
+				s, err = arena.AppendSlice(nil, n)
+				if err != nil {
+					b.Fatal(err)
+				}
+			}
+		}
+		arena.Reset()
+	}
+}
+
+var benchSizes = []int{10, 100, 1_000, 10_000, 100_000, 1_000_000}
+
+// ----------------------------------------------------------------------------
+// Allocate – raw byte reservations
+// ----------------------------------------------------------------------------
+func BenchmarkSizesAllocate(b *testing.B) {
+	for _, sz := range benchSizes {
+		b.Run(fmt.Sprintf("%dB", sz), func(b *testing.B) {
+			arena, _ := NewMemoryArena[byte](sz * 2) // twice the request → reset rarely
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, err := arena.Allocate(sz); err != nil {
+					if err != ErrArenaFull {
+						b.Fatalf("unexpected err: %v", err)
+					}
+					arena.Reset()
+					_, _ = arena.Allocate(sz)
+				}
+			}
+		})
+	}
+}
+
+// ----------------------------------------------------------------------------
+// NewObject – struct allocation & copy
+// ----------------------------------------------------------------------------
+type t struct{ A, B, C int }
+
+func BenchmarkSizesNewObject(b *testing.B) {
+	for _, sz := range benchSizes {
+		b.Run(fmt.Sprintf("%d×tiny", sz), func(b *testing.B) {
+			arena, _ := NewMemoryArena[t](sz * int(unsafe.Sizeof(t{})) * 2)
+			obj := t{1, 2, 3}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				if _, err := arena.NewObject(obj); err != nil {
+					if err != ErrArenaFull {
+						b.Fatalf("err: %v", err)
+					}
+					arena.Reset()
+					_, _ = arena.NewObject(obj)
+				}
+			}
+		})
+	}
+}
+
+// ----------------------------------------------------------------------------
+// AppendSlice – growing a slice from 0 → size‑1
+// ----------------------------------------------------------------------------
+func BenchmarkSizesAppendSlice(b *testing.B) {
+	for _, sz := range benchSizes {
+		b.Run(fmt.Sprintf("%dIntsGrow", sz), func(b *testing.B) {
+			arena, _ := NewMemoryArena[int](sz * 8 * 2) // 8 bytes per int
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				var s []int
+				var err error
+				for n := 0; n < sz; n++ {
+					s, err = arena.AppendSlice(s, n)
+					if err != nil {
+						if err != ErrArenaFull {
+							b.Fatalf("err: %v", err)
+						}
+						arena.Reset()
+						s, _ = arena.AppendSlice(nil, n)
+					}
+				}
+				arena.Reset()
+			}
+		})
+	}
+}
+
+// bytesEqual compares two byte slices without allocating.
+func bytesEqual(a, b []byte) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// FuzzAllocateRoundTrip stresses Allocate/Reset via go test -fuzz (Go >=1.18).
+// It checks that after Reset the arena returns zeroed bytes while ResetFast does not.
+func FuzzAllocateRoundTrip(f *testing.F) {
+	f.Add(uint8(8)) // seed corpus – 8 bytes
+	f.Fuzz(func(t *testing.T, n uint8) {
+		if n == 0 {
+			t.Skip()
+		}
+		arena, _ := NewMemoryArena[byte](1024)
+		p, err := arena.Allocate(int(n))
 		if err != nil {
-			b.Fatalf("Iteration %d: AllocateNewValue failed: %v", i, err) // Use Fatalf
+			t.Fatalf("Allocate: %v", err)
 		}
-	}
+		s := unsafe.Slice((*byte)(p), int(n))
+		for i := range s {
+			s[i] = 0xAB
+		}
+		arena.Reset()
+		p2, _ := arena.Allocate(int(n))
+		s2 := unsafe.Slice((*byte)(p2), int(n))
+		for i, v := range s2 {
+			if v != 0 {
+				t.Fatalf("byte %d not zero after Reset (value %x)", i, v)
+			}
+		}
+	})
 }
 
-func BenchmarkMemoryArena_AllocateBuffer(b *testing.B) {
-	arena, err := NewMemoryArena[int](benchmarkArenaSize) // Increased size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	allocSize := 10
+// BenchmarkReset measures the cost of a zeroing Reset which calls memclr.
+func BenchmarkReset(b *testing.B) {
+	arena, _ := NewMemoryArena[byte](1 << 20)
+	// Fill some memory each iter so Reset actually has work to do.
+	fill := make([]byte, 4096)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		arena.Reset() // Reset for each allocation benchmark iteration
-		_, err = arena.AllocateBuffer(allocSize)
-		if err != nil {
-			b.Fatalf("Iteration %d: AllocateBuffer failed: %v", i, err) // Use Fatalf
-		}
+		_, _ = arena.Allocate(len(fill))
+		copy(unsafe.Slice((*byte)(unsafe.Pointer(uintptr(arena.base)+uintptr(int(arena.offset)-len(fill)))), len(fill)), fill)
+		arena.Reset()
 	}
 }
 
-func BenchmarkMemoryArena_Allocate(b *testing.B) {
-	arena, err := NewMemoryArena[int](benchmarkArenaSize) // Increased size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	allocSize := 10
+// small fits in one cache line.
+type small struct{ a, b int64 }
+
+// big forces an allocation much larger than the usual scalar values.
+type big struct{ buf [2048]byte }
+
+// -----------------------------------------------------------------------------
+// Helper to prevent the compiler from optimising away allocations.
+var sink any
+
+// -----------------------------------------------------------------------------
+// NewObject benchmarks – arena vs native --------------------------------------------------
+
+func BenchmarkArenaNewObjectSmall(b *testing.B) {
+	arena, _ := NewMemoryArena[small](8 << 20) // 8 MiB backing store
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		arena.Reset() // Reset for each allocation benchmark iteration
-		_, err = arena.Allocate(allocSize)
-		if err != nil {
-			b.Fatalf("Iteration %d: Allocate failed: %v", i, err) // Use Fatalf
-		}
+		p, _ := arena.NewObject(small{int64(i), int64(i)})
+		sink = p
 	}
+	runtime.KeepAlive(sink)
 }
 
-func BenchmarkMemoryArena_Reset(b *testing.B) {
-	// Benchmarking Reset itself doesn't require a huge arena unless setup involves filling it.
-	arena, err := NewMemoryArena[int](1024) // Moderate size is likely fine
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	// Optional: Allocate some data before timing if you want Reset to clear something
-	// _, _ = arena.Allocate(512)
+func BenchmarkNativeNewObjectSmall(b *testing.B) {
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		arena.Reset() // This is the operation being benchmarked
+		sink = &small{int64(i), int64(i)}
 	}
+	runtime.KeepAlive(sink)
 }
 
-func BenchmarkMemoryArena_Free(b *testing.B) {
-	// Benchmarking Free itself
-	arena, err := NewMemoryArena[int](1024) // Moderate size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	// Optional: Allocate some data before timing if you want Free to clear something
-	// _, _ = arena.Allocate(512)
+func BenchmarkArenaNewObjectBig(b *testing.B) {
+	arena, _ := NewMemoryArena[big](32 << 20)
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		arena.Free() // This is the operation being benchmarked
+		p, _ := arena.NewObject(big{})
+		sink = p
 	}
+	runtime.KeepAlive(sink)
 }
 
-func BenchmarkMemoryArena_GetResult(b *testing.B) {
-	arena, err := NewMemoryArena[int](1024) // Moderate size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
+func BenchmarkNativeNewObjectBig(b *testing.B) {
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_ = arena.GetResult() // This is the operation being benchmarked
+		sink = &big{}
 	}
+	runtime.KeepAlive(sink)
 }
 
-// Note: Benchmarking Resize/ResizePreserve without allocations might not be very informative.
-// A more realistic benchmark might allocate data, then resize.
-// Keeping the original structure for now.
+// -----------------------------------------------------------------------------
+// Allocate(sz) benchmarks – arena vs make --------------------------------------
 
-func BenchmarkMemoryArena_ResizePreserve(b *testing.B) {
-	// Initial size should be large enough if allocations happen before resize.
-	initialSize := 1024
-	resizeTo := 2048
-	arena, err := NewMemoryArena[int](initialSize)
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	// Optional: Allocate some data here before timing
-	// _, _ = arena.Allocate(initialSize / 2)
+func BenchmarkArenaAllocate64(b *testing.B) {
+	arena, _ := NewMemoryArena[byte](4 << 20)
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		// Reset state if needed for consistent resize benchmark
-		// arena.Reset()
-		// arena.Allocate(initialSize / 2) // Re-allocate if testing resize with data
-		err = arena.ResizePreserve(resizeTo)
-		// Reset back to initial size for next iteration if needed?
-		// Or just keep resizing? Depends on what's being measured.
-		// If just the call:
-		if err != nil {
-			b.Fatalf("ResizePreserve failed: %v", err) // Use Fatalf
-		}
-		// If testing repeated resize on same (growing) arena, might need larger initial/target sizes
-		// Or reset the arena size back if possible/meaningful
-		arena.Resize(initialSize) // Reset size for next iteration consistency (if desired)
-
+		p, _ := arena.Allocate(64)
+		sink = p
 	}
+	runtime.KeepAlive(sink)
 }
 
-func BenchmarkMemoryArena_Resize(b *testing.B) {
-	initialSize := 1024
-	resizeTo := 2048
-	arena, err := NewMemoryArena[int](initialSize)
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
+func BenchmarkNativeMakeSlice64(b *testing.B) {
+	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		err = arena.Resize(resizeTo)
-		if err != nil {
-			b.Fatalf("Resize failed: %v", err) // Use Fatalf
-		}
-		// Reset size for next iteration consistency (if desired)
-		arena.Resize(initialSize)
+		sink = make([]byte, 64)
 	}
+	runtime.KeepAlive(sink)
 }
 
-// Test that the underlying memory slice is large enough to hold size+offset.
-func TestNewMemoryArenaBuffer_MemoryLength(t *testing.T) {
-	size := 128
-	alignment := uintptr(32)
-	buf := NewMemoryArenaBuffer(size, alignment)
-
-	// buffer.memory must be at least size + offset so that memory[offset:offset+size] is valid
-	if len(buf.memory) < buf.offset+size {
-		t.Errorf("memory length %d too small; want >= offset(%d) + size(%d)", len(buf.memory), buf.offset, size)
+func BenchmarkArenaAllocate4K(b *testing.B) {
+	arena, _ := NewMemoryArena[byte](8 << 20)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		p, _ := arena.Allocate(4096)
+		sink = p
 	}
-
-	// offset must be in the range [0, alignment)
-	if buf.offset < 0 || uintptr(buf.offset) >= alignment {
-		t.Errorf("offset %d out of valid range [0,%d)", buf.offset, alignment)
-	}
+	runtime.KeepAlive(sink)
 }
 
-// Test that the buffer is zero‑initialized.
-func TestNewMemoryArenaBuffer_ZeroInitialization(t *testing.T) {
-	buf := NewMemoryArenaBuffer(50, 8)
-	for i, b := range buf.memory {
-		if b != 0 {
-			t.Errorf("memory at index %d = %d; want 0", i, b)
-		}
+func BenchmarkNativeMakeSlice4K(b *testing.B) {
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		sink = make([]byte, 4096)
 	}
+	runtime.KeepAlive(sink)
 }
 
-// Test that writes and reads at the effective base are in‑bounds.
-func TestNewMemoryArenaBuffer_WriteRead(t *testing.T) {
-	size := 16
-	buf := NewMemoryArenaBuffer(size, 8)
+// -----------------------------------------------------------------------------
+// Reset cost -------------------------------------------------------------------
 
-	// write a pattern into the "usable" region
-	base := buf.offset
-	for i := 0; i < size; i++ {
-		buf.memory[base+i] = byte(i + 1)
-	}
-	// read it back
-	for i := 0; i < size; i++ {
-		if got := buf.memory[base+i]; got != byte(i+1) {
-			t.Errorf("buf.memory[%d] = %d; want %d", base+i, got, byte(i+1))
-		}
-	}
-}
-
-func TestDanglingPointerZeroedAfterFree(t *testing.T) {
-	// Create an arena for uint32 values with 16 bytes capacity
-	arena, err := NewMemoryArena[uint32](16)
-	if err != nil {
-		t.Fatalf("failed to create arena: %v", err)
-	}
-
-	// Allocate space and write a known value
-	size := int(unsafe.Sizeof(uint32(0)))
-	ptr, err := arena.AllocateNewValue(size, uint32(0xDEADBEEF))
-	if err != nil {
-		t.Fatalf("AllocateNewValue failed: %v", err)
-	}
-
-	// Verify the written value
-	val := *(*uint32)(ptr)
-	if val != 0xDEADBEEF {
-		t.Errorf("expected initial value 0xDEADBEEF, got 0x%X", val)
-	}
-
-	// Free the arena (zero and reset)
-	arena.Free()
-
-	// Read from the old pointer: should be zero
-	valAfter := *(*uint32)(ptr)
-	if valAfter != 0 {
-		t.Errorf("expected zero after Free(), got 0x%X", valAfter)
-	}
-}
-
-// Test that after Reset(), previously returned pointers are zeroed out.
-func TestDanglingPointerZeroedAfterReset(t *testing.T) {
-	arena, err := NewMemoryArena[uint64](32)
-	if err != nil {
-		t.Fatalf("failed to create arena: %v", err)
-	}
-
-	// Allocate two values
-	size := int(unsafe.Sizeof(uint64(0)))
-	ptr1, err := arena.AllocateNewValue(size, uint64(0xCAFEBABE))
-	if err != nil {
-		t.Fatalf("AllocateNewValue failed: %v", err)
-	}
-	ptr2, err := arena.AllocateNewValue(size, uint64(0xFEEDFACE))
-	if err != nil {
-		t.Fatalf("second AllocateNewValue failed: %v", err)
-	}
-
-	// Check values
-	t1 := *(*uint64)(ptr1)
-	if t1 != 0xCAFEBABE {
-		t.Errorf("expected 0xCAFEBABE at ptr1, got 0x%X", t1)
-	}
-	f1 := *(*uint64)(ptr2)
-	if f1 != 0xFEEDFACE {
-		t.Errorf("expected 0xFEEDFACE at ptr2, got 0x%X", f1)
-	}
-
-	// Reset the arena (should zero and reset offset)
-	arena.Reset()
-
-	// Read from old pointers: expect zero
-	if *(*uint64)(ptr1) != 0 {
-		t.Errorf("expected ptr1 to be zero after Reset(), got 0x%X", *(*uint64)(ptr1))
-	}
-	if *(*uint64)(ptr2) != 0 {
-		t.Errorf("expected ptr2 to be zero after Reset(), got 0x%X", *(*uint64)(ptr2))
+func BenchmarkArenaReset8K(b *testing.B) {
+	arena, _ := NewMemoryArena[byte](8 << 13) // 8 KiB usable
+	// Pre‑touch a page so reset has something to clear
+	arena.Allocate(8 << 13)
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		arena.Reset()
 	}
 }

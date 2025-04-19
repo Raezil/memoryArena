@@ -1,465 +1,192 @@
+// -----------------------------------------------------------------------------
+//  Tests & Benchmarks – concurrent_arena_test.go
+// -----------------------------------------------------------------------------
+
+//go:build go1.22
+// +build go1.22
+
 package memoryArena
 
 import (
+	"fmt"
 	"sync"
 	"testing"
 	"unsafe"
 )
 
-func TestConcurrentArena(t *testing.T) {
-	arena, err := NewConcurrentArena[int](100)
+func TestConcurrentArena_ParallelAllocate(t *testing.T) {
+	const arenaSize = 1 << 20 // 1 MiB
+	ca, err := NewConcurrentArena[uint64](arenaSize)
 	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	ptr, err := arena.Allocate(10)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	if ptr == nil {
-		t.Errorf("Error: ptr is nil")
+		t.Fatalf("new arena: %v", err)
 	}
 
-}
-func TestConcurrentArena_AllocateObject(t *testing.T) {
-	arena, err := NewConcurrentArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	obj := 5
-	_, err = arena.AllocateObject(obj)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-}
-
-func TestConcurrentArena_Free(t *testing.T) {
-	arena, err := NewConcurrentArena[int](100)
-	if err != nil {
-		t.Errorf("Error: %v", err)
-	}
-	arena.Free()
-
-	for i := range arena.buffer.memory {
-		if arena.buffer.memory[i] != 0 {
-			t.Errorf("Error: memory is not freed")
-		}
-	}
-}
-
-// Test that ConcurrentArena AllocateObject returns an error when given a wrong type.
-func TestConcurrentArena_AllocateObject_WrongType(t *testing.T) {
-	arena, err := NewConcurrentArena[int](10)
-	if err != nil {
-		t.Fatalf("Failed to create concurrent arena: %v", err)
-	}
-	_, err = arena.AllocateObject("wrong type")
-	if err == nil {
-		t.Error("Expected error when allocating object with wrong type in concurrent arena, got nil")
-	}
-}
-
-// Test that ConcurrentArena Reset works correctly when called concurrently.
-func TestConcurrentArena_Reset_Concurrent(t *testing.T) {
-	arena, err := NewConcurrentArena[int](10)
-	if err != nil {
-		t.Fatalf("Failed to create concurrent arena: %v", err)
-	}
-	// Allocate some data.
-	_, err = arena.Allocate(10)
-	if err != nil {
-		t.Fatalf("Allocation failed: %v", err)
-	}
-	done := make(chan bool)
-	go func() {
-		arena.Reset()
-		done <- true
-	}()
-	<-done
-	if arena.buffer.offset != 0 {
-		t.Error("Expected offset 0 after concurrent reset")
-	}
-}
-
-// TESTS
-
-const benchmarkConcurrentArenaSize = 1 << 20 // 1 MB - adjust as needed
-
-func BenchmarkConcurrentArena_AllocateObject(b *testing.B) {
-	arena, err := NewConcurrentArena[int](benchmarkConcurrentArenaSize) // Increased size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err) // Use Fatalf for setup errors
-	}
-	obj := 5
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		arena.Reset() // Reset for each allocation benchmark iteration
-		_, err = arena.AllocateObject(obj)
-		if err != nil {
-			b.Fatalf("Iteration %d: AllocateObject failed: %v", i, err) // Use Fatalf
-		}
-	}
-}
-
-func BenchmarkConcurrentArena_AllocateNewValue(b *testing.B) {
-	arena, err := NewConcurrentArena[int](benchmarkConcurrentArenaSize) // Increased size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	obj := 5
-	size := int(unsafe.Sizeof(obj)) // Calculate size
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		arena.Reset() // Reset for each allocation benchmark iteration
-		// Assuming AllocateNewValue exists on the non-concurrent arena accessed via embedding
-		_, err = arena.MemoryArena.AllocateNewValue(size, obj) // Call embedded method if needed
-		if err != nil {
-			b.Fatalf("Iteration %d: AllocateNewValue failed: %v", i, err) // Use Fatalf
-		}
-	}
-}
-
-func BenchmarkConcurrentArena_Allocate(b *testing.B) {
-	arena, err := NewConcurrentArena[int](benchmarkConcurrentArenaSize) // Increased size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	allocSize := 10
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		arena.Reset() // Reset for each allocation benchmark iteration
-		_, err = arena.Allocate(allocSize)
-		if err != nil {
-			b.Fatalf("Iteration %d: Allocate failed: %v", i, err) // Use Fatalf
-		}
-	}
-}
-
-// Benchmarking Resize/ResizePreserve/Free/GetResult/Reset for ConcurrentArena
-// follows similar logic to MemoryArena benchmarks. Ensure Fatalf and consider setup/reset logic.
-
-func BenchmarkConcurrentArena_ResizePreserve(b *testing.B) {
-	initialSize := 1024
-	resizeTo := 2048
-	arena, err := NewConcurrentArena[int](initialSize)
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err = arena.ResizePreserve(resizeTo)
-		if err != nil {
-			// Can fail if new size is too small, check error if needed
-			// If just benchmarking call speed, maybe ignore specific errors?
-			// But Fatalf is safer if *any* error invalidates the timing.
-			b.Fatalf("ResizePreserve failed: %v", err)
-		}
-		// Reset size for consistency if desired
-		arena.Resize(initialSize) // Use underlying Resize for simplicity here?
-	}
-}
-
-func BenchmarkConcurrentArena_Resize(b *testing.B) {
-	initialSize := 1024
-	resizeTo := 2048
-	arena, err := NewConcurrentArena[int](initialSize)
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		err = arena.Resize(resizeTo)
-		if err != nil {
-			b.Fatalf("Resize failed: %v", err)
-		}
-		// Reset size for consistency if desired
-		arena.Resize(initialSize)
-	}
-}
-
-func BenchmarkConcurrentArena_Free(b *testing.B) {
-	arena, err := NewConcurrentArena[int](1024) // Moderate size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		arena.Free() // Benchmarking Free operation
-	}
-}
-
-func BenchmarkConcurrentArena_GetResult(b *testing.B) {
-	arena, err := NewConcurrentArena[int](1024) // Moderate size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_ = arena.GetResult() // Benchmarking GetResult operation
-	}
-}
-
-func BenchmarkConcurrentArena_Reset(b *testing.B) {
-	arena, err := NewConcurrentArena[int](1024) // Moderate size
-	if err != nil {
-		b.Fatalf("Error creating arena: %v", err)
-	}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		arena.Reset() // Benchmarking Reset operation
-	}
-}
-
-// Test that ConcurrentArena Reset clears memory when called concurrently.
-func TestConcurrentArena_Reset_ConcurrentMemory(t *testing.T) {
-	arena, err := NewConcurrentArena[int](160)
-	if err != nil {
-		t.Fatalf("Failed to create concurrent arena: %v", err)
-	}
-	// Allocate and initialize memory
-	for i := 0; i < 20; i++ {
-		_, err := arena.AllocateObject(i)
-		if err != nil {
-			t.Fatalf("Allocation failed at iteration %d: %v", i, err)
-		}
-	}
+	const goroutines = 8
+	const perG = 10_000
 
 	var wg sync.WaitGroup
-	wg.Add(5)
-	for i := 0; i < 5; i++ {
+	wg.Add(goroutines)
+	for g := 0; g < goroutines; g++ {
 		go func() {
-			arena.Reset()
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-
-	// After reset, memory should be zeroed
-	for idx, val := range arena.buffer.memory {
-		if val != 0 {
-			t.Errorf("Error: memory not cleared at index %d, got %v", idx, val)
-		}
-	}
-}
-
-// Test that ConcurrentArena Free works correctly when called concurrently.
-func TestConcurrentArena_Free_Concurrent(t *testing.T) {
-	arena, err := NewConcurrentArena[int](1000)
-	if err != nil {
-		t.Fatalf("Failed to create concurrent arena: %v", err)
-	}
-	// Allocate and initialize memory
-	for i := 0; i < 50; i++ {
-		_, err := arena.AllocateObject(i)
-		if err != nil {
-			t.Fatalf("Allocation failed at iteration %d: %v", i, err)
-		}
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(10)
-	for i := 0; i < 10; i++ {
-		go func() {
-			arena.Free()
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-
-	// After free, memory should be zeroed
-	for idx, val := range arena.buffer.memory {
-		if val != 0 {
-			t.Errorf("Error: memory not freed at index %d, got %v", idx, val)
-		}
-	}
-}
-
-// --- New concurrent tests ---
-
-// Test concurrent allocations to ensure thread-safe Allocate implementation.
-func TestConcurrentArena_Allocate_Concurrent(t *testing.T) {
-	arena, err := NewConcurrentArena[int](1000)
-	if err != nil {
-		t.Fatalf("Failed to create concurrent arena: %v", err)
-	}
-	var wg sync.WaitGroup
-	const count = 100
-	results := make([]unsafe.Pointer, count)
-	wg.Add(count)
-	for i := 0; i < count; i++ {
-		i := i
-		go func() {
-			ptr, err := arena.Allocate(1)
-			if err != nil {
-				t.Errorf("Concurrent Allocate failed: %v", err)
+			defer wg.Done()
+			for i := 0; i < perG; i++ {
+				if _, err := ca.NewObject(uint64(i)); err != nil {
+					t.Errorf("alloc: %v", err)
+					return
+				}
 			}
-			results[i] = ptr
-			wg.Done()
 		}()
 	}
 	wg.Wait()
-	// Check non-nil and uniqueness
-	seen := make(map[uintptr]bool)
-	for i, ptr := range results {
-		if ptr == nil {
-			t.Errorf("ptr[%d] is nil", i)
-		}
-		addr := uintptr(ptr)
-		if seen[addr] {
-			t.Errorf("Duplicate pointer at iteration %d: %v", i, ptr)
-		}
-		seen[addr] = true
-	}
 }
 
-// Test concurrent object allocations to ensure AllocateObject is thread-safe and preserves values.
-func TestConcurrentArena_AllocateObject_Concurrent(t *testing.T) {
-	arena, err := NewConcurrentArena[int](1000)
-	if err != nil {
-		t.Fatalf("Failed to create concurrent arena: %v", err)
-	}
-	values := []int{10, 20, 30, 40, 50}
-	var wg sync.WaitGroup
-	count := len(values)
-	results := make([]int, count)
-	wg.Add(count)
-	for idx, v := range values {
-		idx, v := idx, v
-		go func() {
-			ptr, err := arena.AllocateObject(v)
-			if err != nil {
-				t.Errorf("Concurrent AllocateObject failed: %v", err)
+func BenchmarkConcurrentArenaNewObject(b *testing.B) {
+	sizes := []int{100, 1_000, 10_000}
+	for _, n := range sizes {
+		b.Run(fmt.Sprintf("%d", n), func(b *testing.B) {
+			ca, _ := NewConcurrentArena[int](n * 16)
+			b.ResetTimer()
+			b.ReportAllocs()
+			b.SetBytes(int64(n * 8))
+			for i := 0; i < b.N; i++ {
+				for j := 0; j < n; j++ {
+					if _, err := ca.NewObject(j); err != nil {
+						b.Fatal(err)
+					}
+				}
+				ca.Reset()
 			}
-			results[idx] = *(*int)(ptr)
-			wg.Done()
-		}()
+		})
 	}
-	wg.Wait()
-	for i, v := range values {
-		if results[i] != v {
-			t.Errorf("Value mismatch at index %d: expected %d, got %d", i, v, results[i])
+}
+
+func BenchmarkConcurrentArenaParallel(b *testing.B) {
+	const arenaSize = 1 << 20 // 1 MiB
+	ca, _ := NewConcurrentArena[int](arenaSize)
+	b.ResetTimer()
+	b.ReportAllocs()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			ca.NewObject(42)
+		}
+	})
+}
+
+// -----------------------------------------------------------------------------
+//  Unit tests – MemoryArena
+// -----------------------------------------------------------------------------
+
+func TestNewMemoryArena_Errors(t *testing.T) {
+	if _, err := NewMemoryArena[int](0); err != ErrInvalidSize {
+		t.Fatalf("want ErrInvalidSize, got %v", err)
+	}
+}
+
+func TestMemoryArena_AllocateAndReset(t *testing.T) {
+	const sz = 64
+	a, _ := NewMemoryArena[byte](sz)
+
+	// happy path allocate 16 bytes twice
+	for i := 0; i < 2; i++ {
+		p, _ := a.Allocate(16)
+		// Fill and read back to ensure pointer is live
+		b := unsafe.Slice((*byte)(p), 16)
+		for i := range b {
+			b[i] = 0xAA
+		}
+	}
+
+	// Force arena full
+	if _, err := a.Allocate(sz); err != ErrArenaFull {
+		t.Fatalf("expected ErrArenaFull, got %v", err)
+	}
+
+	// Reset clears offset
+	a.Reset()
+	if a.offset != 0 {
+		t.Fatalf("offset not reset: %d", a.offset)
+	}
+}
+
+func TestMemoryArena_NewObject(t *testing.T) {
+	a, _ := NewMemoryArena[int](128)
+	const val = 42
+	p, _ := a.NewObject(val)
+	if *p != val {
+		t.Fatalf("want %d, got %d", val, *p)
+	}
+}
+
+func TestMemoryArena_AppendSlice(t *testing.T) {
+	a, _ := NewMemoryArena[int](512)
+
+	// Start with capacity 4
+	s := make([]int, 0, 4)
+	out, _ := a.AppendSlice(s, 1, 2, 3)
+	if len(out) != 3 {
+		t.Fatalf("len mismatch: %d", len(out))
+	}
+
+	// Force grow
+	out, _ = a.AppendSlice(out, 4, 5, 6, 7)
+	if cap(out) < 7 {
+		t.Fatalf("capacity not grown: %d", cap(out))
+	}
+}
+
+func TestNextPow2(t *testing.T) {
+	cases := map[int]int{1: 8, 9: 16, 16: 16, 17: 32}
+	for in, want := range cases {
+		if got := nextPow2(in); got != want {
+			t.Fatalf("nextPow2(%d) = %d, want %d", in, got, want)
 		}
 	}
 }
 
-// Test concurrent resize operations to ensure thread-safe Resize implementation.
-func TestConcurrentArena_Resize_Concurrent(t *testing.T) {
-	arena, err := NewConcurrentArena[int](10)
-	if err != nil {
-		t.Fatalf("Failed to create concurrent arena: %v", err)
+// -----------------------------------------------------------------------------
+//  Unit tests – ConcurrentArena
+// -----------------------------------------------------------------------------
+
+func TestConcurrentArena_Basic(t *testing.T) {
+	const arenaSize = 1024
+	ca, _ := NewConcurrentArena[int](arenaSize)
+	_, _ = ca.NewObject(1)
+	ca.Reset()
+	if ca.arena.offset != 0 {
+		t.Fatalf("offset not reset: %d", ca.arena.offset)
 	}
+}
+
+func TestConcurrentArena_ParallelSafety(t *testing.T) {
+	const arenaSize = 1 << 16 // 64 KiB
+	ca, _ := NewConcurrentArena[int](arenaSize)
+
 	var wg sync.WaitGroup
-	wg.Add(5)
-	for i := 0; i < 5; i++ {
-		go func() {
-			if err := arena.Resize(20); err != nil {
-				t.Errorf("Concurrent Resize failed: %v", err)
+	const workers = 4
+	const per = 2_000
+	wg.Add(workers)
+	for w := 0; w < workers; w++ {
+		go func(id int) {
+			defer wg.Done()
+			for i := 0; i < per; i++ {
+				if _, err := ca.NewObject(i + id*per); err != nil {
+					t.Errorf("alloc failed: %v", err)
+					return
+				}
 			}
-			wg.Done()
-		}()
+		}(w)
 	}
 	wg.Wait()
-	if len(arena.buffer.memory) != 20 {
-		t.Errorf("Expected capacity 20 after concurrent Resize, got %d", len(arena.buffer.memory))
-	}
 }
 
-// Test concurrent preserve-resize operations to ensure thread-safe ResizePreserve and data integrity.
-func TestConcurrentArena_ResizePreserve_Concurrent(t *testing.T) {
-	arena, err := NewConcurrentArena[int](10)
-	if err != nil {
-		t.Fatalf("Failed to create concurrent arena: %v", err)
-	}
-	// Allocate a value to preserve
-	ptrInit, err := arena.AllocateObject(99)
-	if err != nil {
-		t.Fatalf("Initial allocation failed: %v", err)
-	}
-	var wg sync.WaitGroup
-	wg.Add(5)
-	for i := 0; i < 5; i++ {
-		go func() {
-			if err := arena.ResizePreserve(20); err != nil {
-				t.Errorf("Concurrent ResizePreserve failed: %v", err)
-			}
-			wg.Done()
-		}()
-	}
-	wg.Wait()
-	if len(arena.buffer.memory) != 20 {
-		t.Errorf("Expected capacity 20 after concurrent ResizePreserve, got %d", len(arena.buffer.memory))
-	}
-	// Check preserved initial value
-	val := *(*int)(ptrInit)
-	if val != 99 {
-		t.Errorf("Expected preserved value 99 after ResizePreserve, got %d", val)
-	}
-}
-func TestConcurrentArenaDanglingPointerZeroedAfterFree(t *testing.T) {
-	// Create an arena for uint32 values with 16 bytes capacity
-	arena, err := NewMemoryArena[uint32](16)
-	if err != nil {
-		t.Fatalf("failed to create arena: %v", err)
-	}
+// -----------------------------------------------------------------------------
+//  Benchmarks – ensure they still build (coverage excluded)
+// -----------------------------------------------------------------------------
 
-	// Allocate space and write a known value
-	size := int(unsafe.Sizeof(uint32(0)))
-	ptr, err := arena.AllocateNewValue(size, uint32(0xDEADBEEF))
-	if err != nil {
-		t.Fatalf("AllocateNewValue failed: %v", err)
-	}
-
-	// Verify the written value
-	val := *(*uint32)(ptr)
-	if val != 0xDEADBEEF {
-		t.Errorf("expected initial value 0xDEADBEEF, got 0x%X", val)
-	}
-
-	// Free the arena (zero and reset)
-	arena.Free()
-
-	// Read from the old pointer: should be zero
-	valAfter := *(*uint32)(ptr)
-	if valAfter != 0 {
-		t.Errorf("expected zero after Free(), got 0x%X", valAfter)
-	}
-}
-
-// Test that after Reset(), previously returned pointers are zeroed out.
-func TestConcurrentArenaDanglingPointerZeroedAfterReset(t *testing.T) {
-	arena, err := NewMemoryArena[uint64](32)
-	if err != nil {
-		t.Fatalf("failed to create arena: %v", err)
-	}
-
-	// Allocate two values
-	size := int(unsafe.Sizeof(uint64(0)))
-	ptr1, err := arena.AllocateNewValue(size, uint64(0xCAFEBABE))
-	if err != nil {
-		t.Fatalf("AllocateNewValue failed: %v", err)
-	}
-	ptr2, err := arena.AllocateNewValue(size, uint64(0xFEEDFACE))
-	if err != nil {
-		t.Fatalf("second AllocateNewValue failed: %v", err)
-	}
-
-	// Check values
-	t1 := *(*uint64)(ptr1)
-	if t1 != 0xCAFEBABE {
-		t.Errorf("expected 0xCAFEBABE at ptr1, got 0x%X", t1)
-	}
-	f1 := *(*uint64)(ptr2)
-	if f1 != 0xFEEDFACE {
-		t.Errorf("expected 0xFEEDFACE at ptr2, got 0x%X", f1)
-	}
-
-	// Reset the arena (should zero and reset offset)
-	arena.Reset()
-
-	// Read from old pointers: expect zero
-	if *(*uint64)(ptr1) != 0 {
-		t.Errorf("expected ptr1 to be zero after Reset(), got 0x%X", *(*uint64)(ptr1))
-	}
-	if *(*uint64)(ptr2) != 0 {
-		t.Errorf("expected ptr2 to be zero after Reset(), got 0x%X", *(*uint64)(ptr2))
+func BenchmarkMemoryArenaNewObject(b *testing.B) {
+	a, _ := NewMemoryArena[int](1 << 20)
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		a.NewObject(i)
 	}
 }

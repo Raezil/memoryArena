@@ -47,7 +47,7 @@ func main() {
 	if err != nil {
 		return
 	}
-	obj, _ := NewObject[[]Person](arena, []Person{Person{"Kamil", 27}, Person{"Lukasz", 28}})
+	obj, _ := arena.NewObject([]Person{Person{"Kamil", 27}, Person{"Lukasz", 28}})
 	defer Reset(arena)
 	fmt.Println(obj)
 

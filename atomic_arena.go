@@ -1,138 +1,124 @@
 package memoryArena
 
 import (
-	"fmt"
 	"sync/atomic"
 	"unsafe"
+	_ "unsafe" // for go:linkname
 )
 
-// arenaState holds internal state for AtomicArena, including buffer and current offset.
-type arenaState[T any] struct {
-	buffer *MemoryArenaBuffer
-	offset uintptr
+// AtomicMemoryArena is a thread-safe bump-allocator for type-homogeneous objects.
+// All fields are private; no direct external mutation allowed.
+// It uses atomic operations to allow concurrent allocations.
+type AtomicMemoryArena[T any] struct {
+	buffer    []byte         // backing storage (kept to satisfy GC & checkptr)
+	base      unsafe.Pointer // first aligned byte inside buffer
+	size      int            // usable capacity in bytes
+	offset    atomic.Int64   // current allocation offset (≤ size)
+	alignMask int            // alignment-1 of T
+	elemSize  int            // sizeof(T)
+	zeroBuf   []byte         // kept for tests
 }
 
-// AtomicArena provides lock-free, thread-safe bump allocation using MemoryArenaBuffer.
-type AtomicArena[T any] struct {
-	state     atomic.Pointer[arenaState[T]]
-	alignment uintptr
-}
-
-// NewAtomicArena creates a new AtomicArena with the specified capacity.
-// Returns ErrInvalidSize if size <= 0.
-func NewAtomicArena[T any](size int) (*AtomicArena[T], error) {
+// NewAtomicMemoryArena allocates an arena with at least `size` bytes of usable space, thread-safe.
+func NewAtomicMemoryArena[T any](size int) (*AtomicMemoryArena[T], error) {
 	if size <= 0 {
 		return nil, ErrInvalidSize
 	}
-	var zero T
-	alignment := unsafe.Alignof(zero)
-	buf := NewMemoryArenaBuffer(size, alignment)
-	arena := &AtomicArena[T]{alignment: alignment}
-	initial := &arenaState[T]{
-		buffer: buf,
-		offset: uintptr(buf.offset),
+	var dummy T
+	alignment := int(unsafe.Alignof(dummy))
+	alignMask := alignment - 1
+	elemSize := int(unsafe.Sizeof(dummy))
+
+	buf := make([]byte, size+alignment)
+	raw := uintptr(unsafe.Pointer(&buf[0]))
+	off := 0
+	if rem := int(raw) & alignMask; rem != 0 {
+		off = alignment - rem
 	}
-	arena.state.Store(initial)
-	return arena, nil
+	basePtr := unsafe.Pointer(&buf[off])
+
+	a := &AtomicMemoryArena[T]{
+		buffer:    buf,
+		base:      basePtr,
+		size:      size,
+		alignMask: alignMask,
+		elemSize:  elemSize,
+	}
+	// offset starts at 0
+	return a, nil
 }
 
-// Allocate atomically reserves size bytes and returns a pointer, or an error.
-func (arena *AtomicArena[T]) Allocate(size int) (unsafe.Pointer, error) {
-	if size <= 0 {
+// Allocate reserves sz bytes and returns a pointer to the block, or ErrArenaFull.
+func (a *AtomicMemoryArena[T]) Allocate(sz int) (unsafe.Pointer, error) {
+	if sz <= 0 {
 		return nil, ErrInvalidSize
 	}
 	for {
-		old := arena.state.Load()
-		buf := old.buffer
-		off := old.offset
-		// align the offset
-		rem := off % arena.alignment
-		var aligned uintptr
-		if rem != 0 {
-			aligned = off + (arena.alignment - rem)
-		} else {
-			aligned = off
-		}
-		newOff := aligned + uintptr(size)
-		// check capacity
-		if int(newOff) > buf.size {
+		old := a.offset.Load()
+		off := (int(old) + a.alignMask) &^ a.alignMask
+		newOff := off + sz
+		if newOff > a.size {
 			return nil, ErrArenaFull
 		}
-		// attempt to update state
-		newState := &arenaState[T]{buffer: buf, offset: newOff}
-		if arena.state.CompareAndSwap(old, newState) {
-			// Audited: conversion of &buf.memory[aligned] to unsafe.Pointer is safe
-			// because `aligned` has been validated against buf.size above.
-			// #nosec G103
-			return unsafe.Pointer(&buf.memory[aligned]), nil
+		if a.offset.CompareAndSwap(old, int64(newOff)) {
+			return unsafe.Add(a.base, uintptr(off)), nil
 		}
-		// retry on contention
 	}
 }
 
-// AllocateNewValue allocates and copies obj into the arena.
-func (arena *AtomicArena[T]) AllocateNewValue(obj T) (unsafe.Pointer, error) {
-	sz := int(unsafe.Sizeof(obj))
-	ptr, err := arena.Allocate(sz)
-	if err != nil {
-		return nil, err
-	}
-	*(*T)(ptr) = obj
-	return ptr, nil
-}
-
-// AllocateObject allocates and initializes the provided obj (of expected type T) in the arena.
-func (arena *AtomicArena[T]) AllocateObject(obj interface{}) (unsafe.Pointer, error) {
-	typedObj, ok := obj.(T)
-	if !ok {
-		return nil, fmt.Errorf("AllocateObject: expected type %T, got %T", *new(T), obj)
-	}
-	return arena.AllocateNewValue(typedObj)
-}
-
-// Reset clears the arena by replacing its buffer, safe under concurrent allocations.
-func (arena *AtomicArena[T]) Reset() {
-	old := arena.state.Load()
-	bufSize := old.buffer.size
-	newBuf := NewMemoryArenaBuffer(bufSize, arena.alignment)
-	newState := &arenaState[T]{buffer: newBuf, offset: uintptr(newBuf.offset)}
-	arena.state.Store(newState)
-}
-
-// Resize resets the arena to newSize, discarding all data. Safe under concurrent allocations.
-func (arena *AtomicArena[T]) Resize(newSize int) error {
-	if newSize <= 0 {
-		return ErrInvalidSize
-	}
-	newBuf := NewMemoryArenaBuffer(newSize, arena.alignment)
-	newState := &arenaState[T]{buffer: newBuf, offset: uintptr(newBuf.offset)}
-	arena.state.Store(newState)
-	return nil
-}
-
-// ResizePreserve resizes the arena to newSize, preserving existing data.
-// Note: not safe under concurrent allocations.
-func (arena *AtomicArena[T]) ResizePreserve(newSize int) error {
-	if newSize <= 0 {
-		return ErrInvalidSize
-	}
+// NewObject allocates space for one element of T, stores obj, and returns its pointer.
+func (a *AtomicMemoryArena[T]) NewObject(obj T) (*T, error) {
 	for {
-		old := arena.state.Load()
-		buf := old.buffer
-		// compute how many bytes are in use, beyond the initial alignment
-		base := uintptr(buf.offset)
-		used := int(old.offset - base)
-		if used > newSize {
-			return ErrNewSizeTooSmall
+		old := a.offset.Load()
+		off := (int(old) + a.alignMask) &^ a.alignMask
+		newOff := off + a.elemSize
+		if newOff > a.size {
+			return nil, ErrArenaFull
 		}
-		// allocate new buffer and copy the used portion
-		newBuf := NewMemoryArenaBuffer(newSize, arena.alignment)
-		copy(newBuf.memory[newBuf.offset:], buf.memory[buf.offset:buf.offset+used])
-		newState := &arenaState[T]{buffer: newBuf, offset: uintptr(newBuf.offset) + uintptr(used)}
-		// attempt CAS; if it succeeds, we've atomically swapped to the new preserved state
-		if arena.state.CompareAndSwap(old, newState) {
-			return nil
+		if a.offset.CompareAndSwap(old, int64(newOff)) {
+			ptr := (*T)(unsafe.Add(a.base, uintptr(off)))
+			*ptr = obj
+			return ptr, nil
 		}
-		// retry: another goroutine allocated meanwhile, so reload and preserve a larger snapshot
 	}
+}
+
+// AppendSlice appends elems to slice, using arena-backed storage when capacity exceeded.
+func (a *AtomicMemoryArena[T]) AppendSlice(slice []T, elems ...T) ([]T, error) {
+	if len(elems) == 0 {
+		return slice, nil
+	}
+	need := len(slice) + len(elems)
+	if need <= cap(slice) {
+		return append(slice, elems...), nil
+	}
+	newCap := nextPow2(need)
+	sz := newCap * a.elemSize
+	for {
+		old := a.offset.Load()
+		off := (int(old) + a.alignMask) &^ a.alignMask
+		newOff := off + sz
+		if newOff > a.size {
+			return nil, ErrArenaFull
+		}
+		if a.offset.CompareAndSwap(old, int64(newOff)) {
+			newArr := unsafe.Slice((*T)(unsafe.Add(a.base, uintptr(off))), newCap)
+			n := copy(newArr, slice)
+			copy(newArr[n:], elems)
+			return newArr[:need], nil
+		}
+	}
+}
+
+// Reset clears all allocated data, setting offset back to zero (not thread-safe).
+func (a *AtomicMemoryArena[T]) Reset() {
+	old := a.offset.Load()
+	if old == 0 {
+		return
+	}
+	if a.zeroBuf == nil {
+		a.zeroBuf = make([]byte, len(a.buffer))
+	}
+	memclrNoHeapPointers(a.base, uintptr(old))
+	a.offset.Store(0)
 }
