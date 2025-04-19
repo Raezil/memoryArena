@@ -48,7 +48,7 @@ func NewAtomicMemoryArena[T any](size int) (*AtomicMemoryArena[T], error) {
 	return a, nil
 }
 
-// Allocate reserves sz bytes and returns a pointer to the block, or ErrArenaFull.
+// Allocate atomically reserves sz bytes and returns a pointer.
 func (a *AtomicMemoryArena[T]) Allocate(sz int) (unsafe.Pointer, error) {
 	if sz <= 0 {
 		return nil, ErrInvalidSize
@@ -66,21 +66,15 @@ func (a *AtomicMemoryArena[T]) Allocate(sz int) (unsafe.Pointer, error) {
 	}
 }
 
-// NewObject allocates space for one element of T, stores obj, and returns its pointer.
+// NewObject allocates space for one element of T using Allocate, stores obj, and returns its pointer.
 func (a *AtomicMemoryArena[T]) NewObject(obj T) (*T, error) {
-	for {
-		old := a.offset.Load()
-		off := (int(old) + a.alignMask) &^ a.alignMask
-		newOff := off + a.elemSize
-		if newOff > a.size {
-			return nil, ErrArenaFull
-		}
-		if a.offset.CompareAndSwap(old, int64(newOff)) {
-			ptr := (*T)(unsafe.Add(a.base, uintptr(off)))
-			*ptr = obj
-			return ptr, nil
-		}
+	ptr, err := a.Allocate(a.elemSize)
+	if err != nil {
+		return nil, err
 	}
+	p := (*T)(ptr)
+	*p = obj
+	return p, nil
 }
 
 // AppendSlice appends elems to slice, using arena-backed storage when capacity exceeded.

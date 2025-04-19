@@ -87,17 +87,17 @@ func (a *MemoryArena[T]) Allocate(sz int) (unsafe.Pointer, error) {
 	return unsafe.Add(a.base, uintptr(off)), nil
 }
 
+// NewObject allocates space for T by calling Allocate, copies `obj` into it, and returns *T.
+//
 //go:nosplit
 func (a *MemoryArena[T]) NewObject(obj T) (*T, error) {
-	off := (a.offset + a.alignMask) &^ a.alignMask
-	end := off + a.elemSize
-	if end > a.size {
-		return nil, ErrArenaFull
+	ptr, err := a.Allocate(a.elemSize)
+	if err != nil {
+		return nil, err
 	}
-	a.offset = end
-	ptr := (*T)(unsafe.Add(a.base, uintptr(off)))
-	*ptr = obj
-	return ptr, nil
+	p := (*T)(ptr)
+	*p = obj
+	return p, nil
 }
 
 func (a *MemoryArena[T]) Reset() {
