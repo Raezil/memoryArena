@@ -42,11 +42,19 @@ type MemoryArena[T any] struct {
 	zeroBuf   []byte         // kept for unit‑test expectations
 }
 
+func (a *MemoryArena[T]) Offset() int {
+	return a.offset
+}
+
+func (a *MemoryArena[T]) Base() unsafe.Pointer {
+	return a.base
+}
+
 // NewMemoryArena allocates an arena with at least `size` bytes of usable space.
 // Returned addresses are naturally aligned for *T.
 //
 //go:nosplit
-func NewMemoryArena[T any](size int) (*MemoryArena[T], error) {
+func NewMemoryArena[T any](size int) (Arena[T], error) {
 	if size <= 0 {
 		return nil, ErrInvalidSize
 	}

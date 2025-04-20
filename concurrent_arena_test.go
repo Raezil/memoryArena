@@ -103,8 +103,8 @@ func TestMemoryArena_AllocateAndReset(t *testing.T) {
 
 	// Reset clears offset
 	a.Reset()
-	if a.offset != 0 {
-		t.Fatalf("offset not reset: %d", a.offset)
+	if a.Offset() != 0 {
+		t.Fatalf("offset not reset: %d", a.Offset())
 	}
 }
 
@@ -152,8 +152,8 @@ func TestConcurrentArena_Basic(t *testing.T) {
 	ca, _ := NewConcurrentArena[int](arenaSize)
 	_, _ = ca.NewObject(1)
 	ca.Reset()
-	if ca.arena.offset != 0 {
-		t.Fatalf("offset not reset: %d", ca.arena.offset)
+	if ca.Offset() != 0 {
+		t.Fatalf("offset not reset: %d", ca.Offset())
 	}
 }
 

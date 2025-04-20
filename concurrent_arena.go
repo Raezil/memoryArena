@@ -7,10 +7,10 @@ import (
 
 type ConcurrentArena[T any] struct {
 	mu    sync.Mutex
-	arena *MemoryArena[T]
+	arena Arena[T]
 }
 
-func NewConcurrentArena[T any](size int) (*ConcurrentArena[T], error) {
+func NewConcurrentArena[T any](size int) (Arena[T], error) {
 	a, err := NewMemoryArena[T](size)
 	if err != nil {
 		return nil, err
@@ -43,4 +43,12 @@ func (c *ConcurrentArena[T]) Reset() {
 	c.mu.Lock()
 	c.arena.Reset()
 	c.mu.Unlock()
+}
+
+func (c *ConcurrentArena[T]) Offset() int {
+	return c.arena.Offset()
+}
+
+func (ca *ConcurrentArena[T]) Base() unsafe.Pointer {
+	return ca.arena.Base()
 }

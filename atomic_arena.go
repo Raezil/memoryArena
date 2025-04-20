@@ -22,7 +22,7 @@ type AtomicArena[T any] struct {
 
 // NewAtomicArena allocates an arena with at least `size` bytes of usable space.
 // Returned addresses are naturally aligned for *T.
-func NewAtomicArena[T any](size int) (*AtomicArena[T], error) {
+func NewAtomicArena[T any](size int) (Arena[T], error) {
 	if size <= 0 {
 		return nil, ErrInvalidSize
 	}
@@ -128,4 +128,12 @@ func (a *AtomicArena[T]) AppendSlice(slice []T, elems ...T) ([]T, error) {
 			return newArr[:need], nil
 		}
 	}
+}
+
+func (a *AtomicArena[T]) Offset() int {
+	return int(a.offset)
+}
+
+func (a *AtomicArena[T]) Base() unsafe.Pointer {
+	return a.base
 }

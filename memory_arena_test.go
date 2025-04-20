@@ -250,7 +250,7 @@ func BenchmarkReset(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		_, _ = arena.Allocate(len(fill))
-		copy(unsafe.Slice((*byte)(unsafe.Pointer(uintptr(arena.base)+uintptr(int(arena.offset)-len(fill)))), len(fill)), fill)
+		copy(unsafe.Slice((*byte)(unsafe.Pointer(uintptr(arena.Base())+uintptr(int(arena.Offset())-len(fill)))), len(fill)), fill)
 		arena.Reset()
 	}
 }
