@@ -1,6 +1,7 @@
 package memoryArena
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -134,4 +135,151 @@ func BenchmarkNewObject(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		a.NewObject(i)
 	}
+}
+
+func BenchmarkAtomicMemoryArena_Allocate(b *testing.B) {
+	sizes := []int{1, 10, 100, 1000, 10000, 100000, 1000000}
+	// Use a large capacity to avoid wrap-around during the benchmark
+	const capBytes = 1 << 30 // 1 GiB
+
+	for _, sz := range sizes {
+		sz := sz // capture
+		b.Run(fmt.Sprintf("Allocate_%dB", sz), func(b *testing.B) {
+			arena, err := NewAtomicMemoryArena[byte](capBytes)
+			if err != nil {
+				b.Fatalf("failed to create arena: %v", err)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err := arena.Allocate(sz)
+				if err != nil {
+					b.Fatalf("allocate failed: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkAtomicMemoryArena_NewObject measures per-op cost of NewObject(obj) for various object sizes.
+func BenchmarkAtomicMemoryArena_NewObject(b *testing.B) {
+	const capBytes = 1 << 30 // 1 GiB
+
+	// 1B
+	b.Run("NewObject_1B", func(b *testing.B) {
+		type T [1]byte
+		arena, err := NewAtomicMemoryArena[T](capBytes)
+		if err != nil {
+			b.Fatalf("failed to create arena: %v", err)
+		}
+		var obj T
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := arena.NewObject(obj)
+			if err != nil {
+				b.Fatalf("new object failed: %v", err)
+			}
+		}
+	})
+
+	// 10B
+	b.Run("NewObject_10B", func(b *testing.B) {
+		type T [10]byte
+		arena, err := NewAtomicMemoryArena[T](capBytes)
+		if err != nil {
+			b.Fatalf("failed to create arena: %v", err)
+		}
+		var obj T
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := arena.NewObject(obj)
+			if err != nil {
+				b.Fatalf("new object failed: %v", err)
+			}
+		}
+	})
+
+	// 100B
+	b.Run("NewObject_100B", func(b *testing.B) {
+		type T [100]byte
+		arena, err := NewAtomicMemoryArena[T](capBytes)
+		if err != nil {
+			b.Fatalf("failed to create arena: %v", err)
+		}
+		var obj T
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := arena.NewObject(obj)
+			if err != nil {
+				b.Fatalf("new object failed: %v", err)
+			}
+		}
+	})
+
+	// 1KiB
+	b.Run("NewObject_1KiB", func(b *testing.B) {
+		type T [1024]byte
+		arena, err := NewAtomicMemoryArena[T](capBytes)
+		if err != nil {
+			b.Fatalf("failed to create arena: %v", err)
+		}
+		var obj T
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := arena.NewObject(obj)
+			if err != nil {
+				b.Fatalf("new object failed: %v", err)
+			}
+		}
+	})
+
+	// 10KiB
+	b.Run("NewObject_10KiB", func(b *testing.B) {
+		type T [10240]byte
+		arena, err := NewAtomicMemoryArena[T](capBytes)
+		if err != nil {
+			b.Fatalf("failed to create arena: %v", err)
+		}
+		var obj T
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := arena.NewObject(obj)
+			if err != nil {
+				b.Fatalf("new object failed: %v", err)
+			}
+		}
+	})
+
+	// 100KiB
+	b.Run("NewObject_100KiB", func(b *testing.B) {
+		type T [102400]byte
+		arena, err := NewAtomicMemoryArena[T](capBytes)
+		if err != nil {
+			b.Fatalf("failed to create arena: %v", err)
+		}
+		var obj T
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := arena.NewObject(obj)
+			if err != nil {
+				b.Fatalf("new object failed: %v", err)
+			}
+		}
+	})
+
+	// 1MiB
+	b.Run("NewObject_1MiB", func(b *testing.B) {
+		type T [1048576]byte
+		arena, err := NewAtomicMemoryArena[T](capBytes)
+		if err != nil {
+			b.Fatalf("failed to create arena: %v", err)
+		}
+		var obj T
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			_, err := arena.NewObject(obj)
+			if err != nil {
+				b.Fatalf("new object failed: %v", err)
+			}
+		}
+	})
 }

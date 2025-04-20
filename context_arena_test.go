@@ -2,6 +2,7 @@ package memoryArena
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"unsafe"
 )
@@ -107,5 +108,77 @@ func BenchmarkContextArena_AppendSlice(b *testing.B) {
 		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+// BenchmarkContextArena_Allocate measures per-op cost of Allocate(sz) for various sizes.
+func BenchmarkContextArena_Allocates(b *testing.B) {
+	sizes := []int{1, 10, 100, 1000, 10000, 100000, 1000000}
+	const capBytes = 1 << 30 // 1 GiB
+	ctx := context.Background()
+
+	for _, sz := range sizes {
+		sz := sz
+		b.Run(fmt.Sprintf("Allocate_%dB", sz), func(b *testing.B) {
+			arena, err := NewContextArena[byte](ctx, capBytes)
+			if err != nil {
+				b.Fatalf("failed to create context arena: %v", err)
+			}
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err := arena.Allocate(sz)
+				if err != nil {
+					b.Fatalf("allocate failed: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// BenchmarkContextArena_NewObject measures per-op cost of NewObject(obj) for various object sizes.
+func BenchmarkContextArena_NewObjects(b *testing.B) {
+	const capBytes = 1 << 30 // 1 GiB
+
+	types := []struct {
+		name string
+		sz   int
+	}{{"1B", 1}, {"10B", 10}, {"100B", 100}, {"1KiB", 1024}, {"10KiB", 10 * 1024}, {"100KiB", 100 * 1024}, {"1MiB", 1024 * 1024}}
+
+	for _, tt := range types {
+		tt := tt
+		b.Run(fmt.Sprintf("NewObject_%s", tt.name), func(b *testing.B) {
+			// define an array type of the given size
+			type T [] /* placeholder */ byte
+			switch tt.sz {
+			case 1:
+				type T [1]byte
+			case 10:
+				type T [10]byte
+			case 100:
+				type T [100]byte
+			case 1024:
+				type T [1024]byte
+			case 10 * 1024:
+				type T [10240]byte
+			case 100 * 1024:
+				type T [102400]byte
+			case 1024 * 1024:
+				type T [1048576]byte
+			}
+			ctx := context.Background()
+
+			arena, err := NewContextArena[T](ctx, capBytes)
+			if err != nil {
+				b.Fatalf("failed to create context arena: %v", err)
+			}
+			var obj T
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				_, err := arena.NewObject(obj)
+				if err != nil {
+					b.Fatalf("new object failed: %v", err)
+				}
+			}
+		})
 	}
 }
