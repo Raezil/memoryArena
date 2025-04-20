@@ -12,7 +12,6 @@ Memory Arena Library is a Golang package that consolidates multiple related memo
 - **Grouped Memory Allocations:** Manage related objects within a single arena, streamlining your memory organization.
 - **Efficient Cleanup:** Release all allocations in one swift operation, simplifying resource management.
 - **Concurrency Support:** Use with concurrent operations via a dedicated concurrent arena.
-- **ContextArena:** Zero-allocation, context-scoped generic allocator that ties memory lifetimes to context.Context, automatically resetting when the context is canceled, ideal for per-request buffers without GC pressure.
 
 
 ## Installation
