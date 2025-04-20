@@ -117,40 +117,6 @@ func BenchmarkAllocate64B(b *testing.B) {
 	}
 }
 
-func BenchmarkNewObject_small(b *testing.B) {
-	arena, _ := NewMemoryArena[point](1 << 20)
-	val := point{1, 2}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err := arena.NewObject(val); err != nil {
-			if err != ErrArenaFull {
-				b.Fatal(err)
-			}
-			arena.Reset()
-			if _, err := arena.NewObject(val); err != nil {
-				b.Fatal(err)
-			}
-		}
-	}
-}
-
-func BenchmarkNewObject_big(b *testing.B) {
-	arena, _ := NewMemoryArena[big](4 << 20) // 4 MiB
-	var val big
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err := arena.NewObject(val); err != nil {
-			if err != ErrArenaFull {
-				b.Fatal(err)
-			}
-			arena.Reset()
-			if _, err := arena.NewObject(val); err != nil {
-				b.Fatal(err)
-			}
-		}
-	}
-}
-
 func BenchmarkAppendSliceGrow(b *testing.B) {
 	arena, _ := NewMemoryArena[int](1 << 20)
 	b.ResetTimer()
@@ -248,19 +214,6 @@ func BenchmarkSizesAppendSlice(b *testing.B) {
 	}
 }
 
-// bytesEqual compares two byte slices without allocating.
-func bytesEqual(a, b []byte) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 // FuzzAllocateRoundTrip stresses Allocate/Reset via go test -fuzz (Go >=1.18).
 // It checks that after Reset the arena returns zeroed bytes while ResetFast does not.
 func FuzzAllocateRoundTrip(f *testing.F) {
@@ -303,58 +256,14 @@ func BenchmarkReset(b *testing.B) {
 }
 
 // small fits in one cache line.
-type small struct{ a, b int64 }
 
 // big forces an allocation much larger than the usual scalar values.
-type big struct{ buf [2048]byte }
 
 // -----------------------------------------------------------------------------
 // Helper to prevent the compiler from optimising away allocations.
 var sink any
 
 // -----------------------------------------------------------------------------
-// NewObject benchmarks – arena vs native --------------------------------------------------
-
-func BenchmarkArenaNewObjectSmall(b *testing.B) {
-	arena, _ := NewMemoryArena[small](8 << 20) // 8 MiB backing store
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		p, _ := arena.NewObject(small{int64(i), int64(i)})
-		sink = p
-	}
-	runtime.KeepAlive(sink)
-}
-
-func BenchmarkNativeNewObjectSmall(b *testing.B) {
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		sink = &small{int64(i), int64(i)}
-	}
-	runtime.KeepAlive(sink)
-}
-
-func BenchmarkArenaNewObjectBig(b *testing.B) {
-	arena, _ := NewMemoryArena[big](32 << 20)
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		p, _ := arena.NewObject(big{})
-		sink = p
-	}
-	runtime.KeepAlive(sink)
-}
-
-func BenchmarkNativeNewObjectBig(b *testing.B) {
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		sink = &big{}
-	}
-	runtime.KeepAlive(sink)
-}
-
 // -----------------------------------------------------------------------------
 // Allocate(sz) benchmarks – arena vs make --------------------------------------
 
@@ -369,15 +278,6 @@ func BenchmarkArenaAllocate64(b *testing.B) {
 	runtime.KeepAlive(sink)
 }
 
-func BenchmarkNativeMakeSlice64(b *testing.B) {
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		sink = make([]byte, 64)
-	}
-	runtime.KeepAlive(sink)
-}
-
 func BenchmarkArenaAllocate4K(b *testing.B) {
 	arena, _ := NewMemoryArena[byte](8 << 20)
 	b.ReportAllocs()
@@ -385,15 +285,6 @@ func BenchmarkArenaAllocate4K(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		p, _ := arena.Allocate(4096)
 		sink = p
-	}
-	runtime.KeepAlive(sink)
-}
-
-func BenchmarkNativeMakeSlice4K(b *testing.B) {
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		sink = make([]byte, 4096)
 	}
 	runtime.KeepAlive(sink)
 }

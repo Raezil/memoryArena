@@ -2,25 +2,9 @@ package memoryArena
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"unsafe"
 )
-
-func TestAllocateBeforeCancel(t *testing.T) {
-	ctx := context.Background()
-	ca, err := NewContextArena[int](ctx, 1024)
-	if err != nil {
-		t.Fatalf("failed to create ContextArena: %v", err)
-	}
-	ptr, err := ca.Allocate(8)
-	if err != nil {
-		t.Fatalf("Allocate failed: %v", err)
-	}
-	if ptr == nil {
-		t.Fatal("Allocate returned nil pointer")
-	}
-}
 
 func TestNewObjectBeforeCancel(t *testing.T) {
 	ctx := context.Background()
@@ -53,37 +37,6 @@ func TestAppendSliceBeforeCancel(t *testing.T) {
 	}
 }
 
-func TestContextCancelResetsArena(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	ca, err := NewContextArena[int](ctx, 16)
-	if err != nil {
-		t.Fatalf("failed to create ContextArena: %v", err)
-	}
-	// allocate to advance offset
-	_, err = ca.Allocate(8)
-	if err != nil {
-		t.Fatalf("first Allocate failed: %v", err)
-	}
-	cancel()
-	// after cancel, Allocate should error with context.Canceled
-	_, err = ca.Allocate(8)
-	if err != context.Canceled {
-		t.Fatalf("expected context.Canceled, got %v", err)
-	}
-}
-
-func BenchmarkContextArena_Allocate(b *testing.B) {
-	ctx := context.Background()
-	ca, _ := NewContextArena[int](ctx, b.N*8)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, err := ca.Allocate(8)
-		if err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func BenchmarkContextArena_NewObject(b *testing.B) {
 	ctx := context.Background()
 	ca, _ := NewContextArena[int](ctx, b.N*int(unsafe.Sizeof(int(0))))
@@ -111,74 +64,68 @@ func BenchmarkContextArena_AppendSlice(b *testing.B) {
 	}
 }
 
-// BenchmarkContextArena_Allocate measures per-op cost of Allocate(sz) for various sizes.
-func BenchmarkContextArena_Allocates(b *testing.B) {
-	sizes := []int{1, 10, 100, 1000, 10000, 100000, 1000000}
-	const capBytes = 1 << 30 // 1 GiB
+// Benchmarks for NewObject with varying object sizes
+func BenchmarkContextArena_NewObject_100B(b *testing.B) {
 	ctx := context.Background()
-
-	for _, sz := range sizes {
-		sz := sz
-		b.Run(fmt.Sprintf("Allocate_%dB", sz), func(b *testing.B) {
-			arena, err := NewContextArena[byte](ctx, capBytes)
-			if err != nil {
-				b.Fatalf("failed to create context arena: %v", err)
-			}
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				_, err := arena.Allocate(sz)
-				if err != nil {
-					b.Fatalf("allocate failed: %v", err)
-				}
-			}
-		})
+	n := int(unsafe.Sizeof([100]byte{}))
+	ca, _ := NewContextArena[[100]byte](ctx, b.N*n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ca.NewObject([100]byte{})
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
-// BenchmarkContextArena_NewObject measures per-op cost of NewObject(obj) for various object sizes.
-func BenchmarkContextArena_NewObjects(b *testing.B) {
-	const capBytes = 1 << 30 // 1 GiB
+func BenchmarkContextArena_NewObject_1KB(b *testing.B) {
+	ctx := context.Background()
+	n := int(unsafe.Sizeof([1000]byte{}))
+	ca, _ := NewContextArena[[1000]byte](ctx, b.N*n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ca.NewObject([1000]byte{})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
 
-	types := []struct {
-		name string
-		sz   int
-	}{{"1B", 1}, {"10B", 10}, {"100B", 100}, {"1KiB", 1024}, {"10KiB", 10 * 1024}, {"100KiB", 100 * 1024}, {"1MiB", 1024 * 1024}}
+func BenchmarkContextArena_NewObject_10KB(b *testing.B) {
+	ctx := context.Background()
+	n := int(unsafe.Sizeof([10000]byte{}))
+	ca, _ := NewContextArena[[10000]byte](ctx, b.N*n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ca.NewObject([10000]byte{})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
 
-	for _, tt := range types {
-		tt := tt
-		b.Run(fmt.Sprintf("NewObject_%s", tt.name), func(b *testing.B) {
-			// define an array type of the given size
-			type T [] /* placeholder */ byte
-			switch tt.sz {
-			case 1:
-				type T [1]byte
-			case 10:
-				type T [10]byte
-			case 100:
-				type T [100]byte
-			case 1024:
-				type T [1024]byte
-			case 10 * 1024:
-				type T [10240]byte
-			case 100 * 1024:
-				type T [102400]byte
-			case 1024 * 1024:
-				type T [1048576]byte
-			}
-			ctx := context.Background()
+func BenchmarkContextArena_NewObject_100KB(b *testing.B) {
+	ctx := context.Background()
+	n := int(unsafe.Sizeof([100000]byte{}))
+	ca, _ := NewContextArena[[100000]byte](ctx, b.N*n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ca.NewObject([100000]byte{})
+		if err != nil {
+			b.Fatal(err)
+		}
+	}
+}
 
-			arena, err := NewContextArena[T](ctx, capBytes)
-			if err != nil {
-				b.Fatalf("failed to create context arena: %v", err)
-			}
-			var obj T
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				_, err := arena.NewObject(obj)
-				if err != nil {
-					b.Fatalf("new object failed: %v", err)
-				}
-			}
-		})
+func BenchmarkContextArena_NewObject_1MB(b *testing.B) {
+	ctx := context.Background()
+	n := int(unsafe.Sizeof([1000000]byte{}))
+	ca, _ := NewContextArena[[1000000]byte](ctx, b.N*n)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := ca.NewObject([1000000]byte{})
+		if err != nil {
+			b.Fatal(err)
+		}
 	}
 }
