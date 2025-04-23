@@ -146,7 +146,7 @@ func (a *MemoryArena[T]) AppendSlice(slice []T, elems ...T) ([]T, error) {
 	off := (a.offset + a.alignMask) &^ a.alignMask
 	end := off + sz
 	if end > a.size {
-		return nil, ErrArenaFull
+		return slice, ErrArenaFull
 	}
 	a.offset = end
 	newArr := unsafe.Slice((*T)(unsafe.Add(a.base, uintptr(off))), newCap)
