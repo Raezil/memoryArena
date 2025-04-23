@@ -133,11 +133,30 @@ func (a *MemoryArena[T]) AppendSlice(slice []T, elems ...T) ([]T, error) {
 	arenaEnd := arenaStart + uintptr(a.size)
 	sliceInArena := ptrData >= arenaStart && ptrData < arenaEnd
 
-	// In-place growth if from arena and capacity allows
-	if sliceInArena && need <= cap(slice) {
-		newSlice := slice[:need]
-		copy(newSlice[len(slice):], elems)
-		return newSlice, nil
+	// In-place growth if capacity allows
+	if sliceInArena {
+		if need <= cap(slice) {
+			newSlice := slice[:need]
+			copy(newSlice[len(slice):], elems)
+			return newSlice, nil
+		}
+		// Try in-place reallocation using contiguous arena memory
+		maxCap := a.size / a.elemSize
+		newCap := nextPow2(need)
+		if newCap > maxCap {
+			newCap = maxCap
+		}
+		sliceOffset := int(ptrData - arenaStart)
+		regionEnd := sliceOffset + newCap*a.elemSize
+		if regionEnd <= a.size {
+			if regionEnd > a.offset {
+				a.offset = regionEnd
+			}
+			newArr := unsafe.Slice((*T)(unsafe.Add(a.base, uintptr(sliceOffset))), newCap)
+			copy(newArr, slice)
+			copy(newArr[len(slice):], elems)
+			return newArr[:need], nil
+		}
 	}
 
 	// Allocate new buffer in arena
