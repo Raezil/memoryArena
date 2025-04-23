@@ -21,6 +21,7 @@ package memoryArena
 
 import (
 	"math/bits"
+	"reflect"
 	"unsafe"
 	_ "unsafe" // go:linkname
 )
@@ -124,9 +125,22 @@ func (a *MemoryArena[T]) AppendSlice(slice []T, elems ...T) ([]T, error) {
 		return slice, nil
 	}
 	need := len(slice) + len(elems)
-	if need <= cap(slice) {
-		return append(slice, elems...), nil
+
+	// Determine if slice data originates from this arena by inspecting slice header
+	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&slice))
+	ptrData := hdr.Data
+	arenaStart := uintptr(a.base)
+	arenaEnd := arenaStart + uintptr(a.size)
+	sliceInArena := ptrData >= arenaStart && ptrData < arenaEnd
+
+	// In-place growth if from arena and capacity allows
+	if sliceInArena && need <= cap(slice) {
+		newSlice := slice[:need]
+		copy(newSlice[len(slice):], elems)
+		return newSlice, nil
 	}
+
+	// Allocate new buffer in arena
 	newCap := nextPow2(need)
 	sz := newCap * a.elemSize
 	off := (a.offset + a.alignMask) &^ a.alignMask
@@ -136,8 +150,8 @@ func (a *MemoryArena[T]) AppendSlice(slice []T, elems ...T) ([]T, error) {
 	}
 	a.offset = end
 	newArr := unsafe.Slice((*T)(unsafe.Add(a.base, uintptr(off))), newCap)
-	n := copy(newArr, slice)
-	copy(newArr[n:], elems)
+	copy(newArr, slice)
+	copy(newArr[len(slice):], elems)
 	return newArr[:need], nil
 }
 
