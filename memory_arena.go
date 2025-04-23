@@ -126,25 +126,48 @@ func (a *MemoryArena[T]) AppendSlice(slice []T, elems ...T) ([]T, error) {
 	}
 	need := len(slice) + len(elems)
 
-	// Determine if slice data originates from this arena by inspecting slice header
+	// Figure out if `slice` lives in our arena
 	hdr := (*reflect.SliceHeader)(unsafe.Pointer(&slice))
 	ptrData := hdr.Data
 	arenaStart := uintptr(a.base)
 	arenaEnd := arenaStart + uintptr(a.size)
 	sliceInArena := ptrData >= arenaStart && ptrData < arenaEnd
 
-	// In-place growth if from arena and capacity allows
-	if sliceInArena && need <= cap(slice) {
-		newSlice := slice[:need]
-		copy(newSlice[len(slice):], elems)
-		return newSlice, nil
-	}
-
-	// Allocate new buffer in arena
+	// Maximum number of elements we could ever store
 	maxCap := a.size / a.elemSize
-	if maxCap == 0 {
+	if need > maxCap {
 		return slice, ErrArenaFull
 	}
+
+	if sliceInArena {
+		// 1) In-place grow if there's room
+		if need <= cap(slice) {
+			newSlice := slice[:need]
+			copy(newSlice[len(slice):], elems)
+			return newSlice, nil
+		}
+		// 2) Otherwise, expand the existing block
+		newCap := nextPow2(need)
+		if newCap > maxCap {
+			newCap = maxCap
+		}
+		// Compute where the slice starts in the arena
+		offset := ptrData - arenaStart
+		end := int(offset) + newCap*a.elemSize
+		if end > a.size {
+			return slice, ErrArenaFull
+		}
+		// Bump the arena's offset (aligned) to reserve those bytes
+		a.offset = (end + a.alignMask) &^ a.alignMask
+
+		// Build a *new* slice header pointing at the same block, but with bigger cap
+		newArr := unsafe.Slice((*T)(unsafe.Add(a.base, offset)), newCap)
+		// Copy in the fresh elements
+		copy(newArr[len(slice):], elems)
+		return newArr[:need], nil
+	}
+
+	// 3) Slice wasn't from our arena—allocate a fresh chunk
 	newCap := nextPow2(need)
 	if newCap > maxCap {
 		newCap = maxCap
@@ -156,6 +179,7 @@ func (a *MemoryArena[T]) AppendSlice(slice []T, elems ...T) ([]T, error) {
 		return slice, ErrArenaFull
 	}
 	a.offset = end
+
 	newArr := unsafe.Slice((*T)(unsafe.Add(a.base, uintptr(off))), newCap)
 	copy(newArr, slice)
 	copy(newArr[len(slice):], elems)
