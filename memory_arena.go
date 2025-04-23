@@ -142,6 +142,9 @@ func (a *MemoryArena[T]) AppendSlice(slice []T, elems ...T) ([]T, error) {
 
 	// Allocate new buffer in arena
 	maxCap := a.size / a.elemSize
+	if maxCap == 0 {
+		return slice, ErrArenaFull
+	}
 	newCap := nextPow2(need)
 	if newCap > maxCap {
 		newCap = maxCap
