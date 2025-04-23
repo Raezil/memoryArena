@@ -23,9 +23,44 @@ Install the latest version with:
 go get github.com/Raezil/memoryArena@latest
 ```
 
-Usage Example
+## Usage Example
 
 Below is an example demonstrating how to create a memory arena, allocate objects, and free them efficiently:
+
+### Using Memory Arena
+
+```
+package main
+
+import (
+	"fmt"
+	"unsafe"
+
+	. "github.com/Raezil/memoryArena"
+)
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+func main() {
+	// Allocate enough space for 10 Person structs
+	arena, err := NewMemoryArena[Person](10 * int(unsafe.Sizeof(Person{})))
+	if err != nil {
+		panic(err)
+	}
+	defer arena.Reset()
+
+	p1, _ := arena.NewObject(Person{"Alice", 30})
+	p2, _ := arena.NewObject(Person{"Bob", 25})
+
+	fmt.Println(*p1, *p2)
+}
+```
+
+
+### Using Concurrent Arena
 
 ```
 package main
@@ -52,6 +87,43 @@ func main() {
 
 }
 ```
+### Using AtomicArena
+```
+package main
+
+import (
+	"fmt"
+	"sync"
+
+	. "github.com/Raezil/memoryArena"
+)
+
+type Person struct {
+	Name string
+	Age  int
+}
+
+func main() {
+	// Allocate 1KB buffer for Person allocations
+	arena, err := NewAtomicArena[Person](1024)
+	if err != nil {
+		panic(err)
+	}
+	defer arena.Reset()
+
+	var wg sync.WaitGroup
+	for i, name := range []string{"Carol", "Dave", "Eve"} {
+		wg.Add(1)
+		go func(name string, age int) {
+			defer wg.Done()
+			p, _ := arena.NewObject(Person{name, age})
+			fmt.Println(*p)
+		}(name, i+20)
+	}
+	wg.Wait()
+}
+```
+
 ## Testing & Benchmarks
 
 Run all tests with race detection:
