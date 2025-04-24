@@ -82,7 +82,6 @@ func NewMemoryArena[T any](size int) (Arena[T], error) {
 	}, nil
 }
 
-//go:nosplit
 func (a *MemoryArena[T]) Allocate(sz int) (unsafe.Pointer, error) {
 	if sz <= 0 {
 		return nil, ErrInvalidSize
@@ -97,8 +96,6 @@ func (a *MemoryArena[T]) Allocate(sz int) (unsafe.Pointer, error) {
 }
 
 // NewObject allocates space for T by calling Allocate, copies `obj` into it, and returns *T.
-//
-//go:nosplit
 func (a *MemoryArena[T]) NewObject(obj T) (*T, error) {
 	ptr, err := a.Allocate(a.elemSize)
 	if err != nil {
