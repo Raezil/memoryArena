@@ -151,19 +151,19 @@ AtomicArena reduces allocation time by ~2.8 million×.
 MemoryArena reduces allocation time by ~4.6 million×.
 ## Interpretation
 
-Native new is optimized for very small allocations (< ~32 KB) using thread-local caches and bump-pointer fast paths.
+- Native new is optimized for very small allocations (< ~32 KB) using thread-local caches and bump-pointer fast paths.
 
-Above the small-object threshold (~64 KB), the runtime falls back to slower heap allocations, causing large overhead for big buffers.
+- Above the small-object threshold (~64 KB), the runtime falls back to slower heap allocations, causing large overhead for big buffers.
 
-Arena allocation is O(1) time (constant time per allocation).
+- Arena allocation is O(1) time (constant time per allocation).
 
-Arena allocators maintain constant, single-digit nanosecond performance regardless of buffer size, avoiding GC pressure.
+- Arena allocators maintain constant, single-digit nanosecond performance regardless of buffer size, avoiding GC pressure.
 
 ## Recommendations
 
-Tiny objects (< 32 KB): use native new for simplicity and peak performance.
+- Tiny objects (< 32 KB): use native new for simplicity and peak performance.
 
-Large buffers (≥ 64 KB): use a bump-pointer arena (single-threaded or atomic) to keep allocations in the 4–7 ns range and bypass the GC.
+- Large buffers (≥ 64 KB): use a bump-pointer arena (single-threaded or atomic) to keep allocations in the 4–7 ns range and bypass the GC.
 
 
 ## **📜 Contributing**
