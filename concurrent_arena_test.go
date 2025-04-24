@@ -41,7 +41,7 @@ func TestConcurrentArena_ParallelAllocate(t *testing.T) {
 }
 
 func BenchmarkConcurrentArenaNewObject(b *testing.B) {
-	sizes := []int{100, 1_000, 10_000, 100_000, 1000000}
+	sizes := []int{100, 1_000, 10_000, 100_000, 1000000, 10000000, 100000000}
 	for _, n := range sizes {
 		b.Run(fmt.Sprintf("%d", n), func(b *testing.B) {
 			ca, _ := NewConcurrentArena[int](n * 16)

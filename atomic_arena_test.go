@@ -93,7 +93,7 @@ func TestAtomicArena_Concurrent(t *testing.T) {
 
 // Benchmark NewObject across varying arena sizes
 func BenchmarkAtomicArena_NewObject(b *testing.B) {
-	sizes := []int{100, 1000, 10000, 100000, 1000000}
+	sizes := []int{100, 1_000, 10_000, 100_000, 1000000, 10000000, 100000000}
 	for _, sz := range sizes {
 		b.Run("Size_"+fmt.Sprint(sz), func(b *testing.B) {
 			arena, _ := NewAtomicArena[int](sz)
@@ -107,7 +107,7 @@ func BenchmarkAtomicArena_NewObject(b *testing.B) {
 
 // Benchmark Allocate with fixed size per allocation
 func BenchmarkAtomicArena_Allocate(b *testing.B) {
-	sizes := []int{100, 1000, 10000, 100000, 1000000}
+	sizes := []int{100, 1_000, 10_000, 100_000, 1000000, 10000000, 100000000}
 	sz := 8 // bytes per allocation
 	for _, cap := range sizes {
 		b.Run("Cap_"+fmt.Sprint(cap), func(b *testing.B) {

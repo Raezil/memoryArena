@@ -140,7 +140,7 @@ func BenchmarkAppendSliceGrow(b *testing.B) {
 	}
 }
 
-var benchSizes = []int{10, 100, 1_000, 10_000, 100_000, 1_000_000}
+var benchSizes = []int{10, 100, 1_000, 10_000, 100_000, 1_000_000, 1_000_000_0, 1_000_000_00}
 
 // ----------------------------------------------------------------------------
 // Allocate – raw byte reservations
@@ -158,57 +158,6 @@ func BenchmarkSizesAllocate(b *testing.B) {
 					arena.Reset()
 					_, _ = arena.Allocate(sz)
 				}
-			}
-		})
-	}
-}
-
-// ----------------------------------------------------------------------------
-// NewObject – struct allocation & copy
-// ----------------------------------------------------------------------------
-type t struct{ A, B, C int }
-
-func BenchmarkSizesNewObject(b *testing.B) {
-	for _, sz := range benchSizes {
-		b.Run(fmt.Sprintf("%d×tiny", sz), func(b *testing.B) {
-			arena, _ := NewMemoryArena[t](sz * int(unsafe.Sizeof(t{})) * 2)
-			obj := t{1, 2, 3}
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				if _, err := arena.NewObject(obj); err != nil {
-					if err != ErrArenaFull {
-						b.Fatalf("err: %v", err)
-					}
-					arena.Reset()
-					_, _ = arena.NewObject(obj)
-				}
-			}
-		})
-	}
-}
-
-// ----------------------------------------------------------------------------
-// AppendSlice – growing a slice from 0 → size‑1
-// ----------------------------------------------------------------------------
-func BenchmarkSizesAppendSlice(b *testing.B) {
-	for _, sz := range benchSizes {
-		b.Run(fmt.Sprintf("%dIntsGrow", sz), func(b *testing.B) {
-			arena, _ := NewMemoryArena[int](sz * 8 * 2) // 8 bytes per int
-			b.ResetTimer()
-			for i := 0; i < b.N; i++ {
-				var s []int
-				var err error
-				for n := 0; n < sz; n++ {
-					s, err = arena.AppendSlice(s, n)
-					if err != nil {
-						if err != ErrArenaFull {
-							b.Fatalf("err: %v", err)
-						}
-						arena.Reset()
-						s, _ = arena.AppendSlice(nil, n)
-					}
-				}
-				arena.Reset()
 			}
 		})
 	}
