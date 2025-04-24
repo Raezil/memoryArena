@@ -138,6 +138,22 @@ Run benchmarks:
 go test -bench=. -benchmem
 ```
 
+Tiny objects (< 32 KB) → stick with new.
+
+Medium to huge buffers (≥ 64 KB) → use a memory/atomic arena to keep latency in single‐digit nanoseconds and avoid GC pressure.
+
+At **100 MB** (100 000 000 B) allocations:
+
+| Strategy               | Latency (ns/op) | Speedup vs `new`      |
+|------------------------|-----------------|-----------------------|
+| **Native `new`**       | 19 861 997      | 1× (baseline)         |
+| **AtomicArena.NewObject** | 7.149           | ~2.8 × 10⁶            |
+| **MemoryArena.NewObject** | 4.318           | ~4.6 × 10⁶            |
+
+AtomicArena reduces allocation time by ~2.8 million×.
+
+MemoryArena reduces allocation time by ~4.6 million×.
+
 
 ## **📜 Contributing**
 Want to improve memoryArena? 🚀  
