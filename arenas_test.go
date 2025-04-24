@@ -18,13 +18,13 @@ func makeBench(size int) func(b *testing.B) {
 	}
 }
 
-func BenchmarkNativeMakeSlice100(b *testing.B)     { makeBench(100)(b) }
-func BenchmarkNativeMakeSlice1000(b *testing.B)    { makeBench(1000)(b) }
-func BenchmarkNativeMakeSlice10000(b *testing.B)   { makeBench(10000)(b) }
-func BenchmarkNativeMakeSlice100000(b *testing.B)  { makeBench(100000)(b) }
-func BenchmarkNativeMakeSlice1000000(b *testing.B) { makeBench(1000000)(b) }
-
-func BenchmarkNativeMakeSlice10000000(b *testing.B) { makeBench(10000000)(b) }
+func BenchmarkNativeMakeSlice100(b *testing.B)       { makeBench(100)(b) }
+func BenchmarkNativeMakeSlice1000(b *testing.B)      { makeBench(1000)(b) }
+func BenchmarkNativeMakeSlice10000(b *testing.B)     { makeBench(10000)(b) }
+func BenchmarkNativeMakeSlice100000(b *testing.B)    { makeBench(100000)(b) }
+func BenchmarkNativeMakeSlice1000000(b *testing.B)   { makeBench(1000000)(b) }
+func BenchmarkNativeMakeSlice10000000(b *testing.B)  { makeBench(10000000)(b) }
+func BenchmarkNativeMakeSlice100000000(b *testing.B) { makeBench(100000000)(b) }
 
 // --- Native new([N]byte) benchmarks ---
 
